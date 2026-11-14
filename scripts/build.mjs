@@ -1,9 +1,9 @@
 // Bundle src/ into addon/content and package build/aiops-zotero-mcp-<version>.xpi.
 // Run with `mise run build`. Version comes from package.json; nothing else varies.
 import { build } from "esbuild";
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { zipSync } from "fflate";
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
 const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -45,6 +45,16 @@ const updates = {
 };
 writeFileSync(join(root, "build", "updates.json"), JSON.stringify(updates, null, 2) + "\n");
 
-// -X: no extra file attributes, so the same input gives the same archive.
-execFileSync("zip", ["-q", "-r", "-X", xpi, "."], { cwd: stage });
+// Zip with fflate (a declared dependency), not the system `zip` tool. Paths are sorted and every
+// entry gets the same fixed timestamp, so the same input always gives the same archive.
+function files(dir) {
+  return readdirSync(dir).sort().flatMap((name) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? files(path) : [path];
+  });
+}
+const entries = Object.fromEntries(
+  files(stage).map((path) => [relative(stage, path).split(sep).join("/"), readFileSync(path)]),
+);
+writeFileSync(xpi, zipSync(entries, { level: 9, mtime: new Date("1980-01-02T00:00:00Z") }));
 console.log(`built ${xpi.replace(root, "")}`);
