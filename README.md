@@ -9,6 +9,8 @@ An MCP server that runs **inside Zotero** as a plugin, so AI agents (Claude Code
 
 Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 
+**Using it:** see [docs/usage.md](docs/usage.md) for connecting an agent, what to ask, dry runs, the full tool reference and troubleshooting.
+
 ## Tools
 
 | Tool | What it does |
