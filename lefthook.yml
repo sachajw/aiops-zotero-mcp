@@ -1,0 +1,19 @@
+# Git hooks, run by lefthook (pinned in mise.toml). Jobs live here, not in ~/.config/lefthook
+# templates, so they work on any machine; sources: templates/gitleaks.yml and commitizen.yml there.
+pre-commit:
+  jobs:
+    - name: gitleaks
+      # GITLEAKS_CONFIG (optional) points at a gitleaks config; unset = gitleaks' bundled rules.
+      run: gitleaks protect --staged --no-banner ${GITLEAKS_CONFIG:+--config "$GITLEAKS_CONFIG"}
+    - name: eslint
+      glob: ["*.{ts,js,mjs}", "**/*.{ts,js,mjs}"]
+      run: npx --no-install eslint {staged_files}
+    - name: typecheck
+      glob: ["*.ts", "**/*.ts"]
+      run: npx --no-install tsc --noEmit
+
+commit-msg:
+  jobs:
+    - name: cz-check
+      # Rules in .cz.toml (emoji + LABEL). The same check runs on GitHub: .github/workflows/commitizen.yml
+      run: cz check --commit-msg-file {1}

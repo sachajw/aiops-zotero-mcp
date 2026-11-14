@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+  "name": "aiops Zotero MCP",
+  "version": "__VERSION__",
+  "description": "MCP server inside Zotero for AI agents: localhost only, bearer-token auth",
+  "author": "Sacha Wharton",
+  "homepage_url": "https://github.com/sachajw/aiops-zotero-mcp",
+  "applications": {
+    "zotero": {
+      "id": "aiops-zotero-mcp@sachajw.github.io",
+      "update_url": "https://raw.githubusercontent.com/sachajw/aiops-zotero-mcp/main/updates.json",
+      "strict_min_version": "7.0",
+      "strict_max_version": "10.*"
+    }
+  }
+}

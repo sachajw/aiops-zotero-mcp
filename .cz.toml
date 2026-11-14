@@ -1,0 +1,70 @@
+# Commit rules for this repo, copied from ~/.config/commitizen/cz.toml on 2026-11-14 (commit types
+# and patterns); keep the two in step by hand. Used by the commit-msg hook (lefthook.yml) and by
+# GitHub (.github/workflows/commitizen.yml). `cz bump` updates package.json; the build stamps that
+# version into the plugin manifest and updates.json.
+[tool.commitizen]
+name = "cz_customize"
+tag_format = "v$version"
+version_scheme = "semver"
+version = "0.1.0"
+version_files = ["package.json:^  \"version\""]
+update_changelog_on_bump = true
+major_version_zero = true
+
+[tool.commitizen.customize]
+message_template = "{{change_type}}: {{message}}"
+example = "✨ FEATURE: add megalinter pre-commit template"
+schema = "<emoji> <LABEL>: <description>"
+schema_pattern = '(✨ FEATURE|🐛 FIX|📚 DOC|♻️  CHORE|🛠  BUILD|🚨 TEST|📦 REFACTOR|💎 STYLE|🚀 RELEASE|🔧 CI|⚡ PERF|🧹 CLEANUP|📝 NOTE|🔒 SECURITY):\s.*'
+
+bump_pattern = '^(✨ FEATURE|🐛 FIX|🚀 RELEASE|BREAKING CHANGE)'
+bump_map = { "✨ FEATURE" = "MINOR", "🐛 FIX" = "PATCH", "🚀 RELEASE" = "PATCH", "BREAKING CHANGE" = "MAJOR" }
+
+commit_parser = '^(?P<change_type>✨ FEATURE|🐛 FIX|📚 DOC|♻️  CHORE|🛠  BUILD|🚨 TEST|📦 REFACTOR|💎 STYLE|🚀 RELEASE|🔧 CI|⚡ PERF|🧹 CLEANUP|📝 NOTE|🔒 SECURITY):\s(?P<message>.*)'
+changelog_pattern = '^(✨ FEATURE|🐛 FIX|📚 DOC|♻️  CHORE|🛠  BUILD|🚨 TEST|📦 REFACTOR|💎 STYLE|🚀 RELEASE|🔧 CI|⚡ PERF|🧹 CLEANUP|📝 NOTE|🔒 SECURITY)?(!)?'
+change_type_map = { "✨ FEATURE" = "Features", "🐛 FIX" = "Bug Fixes", "📚 DOC" = "Docs", "♻️  CHORE" = "Chores", "🛠  BUILD" = "Builds", "🚨 TEST" = "Tests", "📦 REFACTOR" = "Refactors", "💎 STYLE" = "Styles", "🚀 RELEASE" = "Releases", "🔧 CI" = "CI", "⚡ PERF" = "Performance", "🧹 CLEANUP" = "Cleanup", "📝 NOTE" = "Notes", "🔒 SECURITY" = "Security" }
+change_type_order = ["✨ FEATURE", "🐛 FIX", "📚 DOC", "🧹 CLEANUP", "📦 REFACTOR", "♻️  CHORE", "💎 STYLE", "🛠  BUILD", "🔧 CI", "🚨 TEST", "⚡ PERF", "🔒 SECURITY", "📝 NOTE", "🚀 RELEASE"]
+
+info = """
+Commit types:
+  ✨  FEATURE    New tool, config, or hook
+  🐛  FIX        Fix a broken config or script
+  📚  DOC        Documentation changes
+  📦  REFACTOR   Restructure configs without changing behavior
+  💎  STYLE      Formatting, alignment, whitespace
+  🧹  CLEANUP    Remove obsolete files, stale caches, dead code
+  ♻️   CHORE      Maintenance — bootstrap, deps, housekeeping
+  🛠  BUILD      Build system, brew, install changes
+  🔧  CI         CI/CD, hooks, automation
+  🚨  TEST       Add or update tests
+  ⚡  PERF       Performance or startup improvements
+  🔒  SECURITY   Credential rotation, access changes, hardening
+  📝  NOTE       Administrative notes, reminders
+  🚀  RELEASE    Release or version bump commits
+"""
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "change_type"
+message = "Select the type of change:"
+choices = [
+    { value = "✨ FEATURE", name = "✨  FEATURE    New tool, config, or hook", key = "f" },
+    { value = "🐛 FIX", name = "🐛  FIX        Fix a broken config or script", key = "x" },
+    { value = "📚 DOC", name = "📚  DOC        Documentation changes", key = "d" },
+    { value = "📦 REFACTOR", name = "📦  REFACTOR   Restructure configs", key = "r" },
+    { value = "💎 STYLE", name = "💎  STYLE      Formatting, alignment", key = "s" },
+    { value = "🧹 CLEANUP", name = "🧹  CLEANUP    Remove obsolete files", key = "u" },
+    { value = "♻️  CHORE", name = "♻️   CHORE      Maintenance tasks", key = "c" },
+    { value = "🛠  BUILD", name = "🛠  BUILD      Build system, deps", key = "b" },
+    { value = "🔧 CI", name = "🔧  CI         CI/CD, hooks, automation", key = "i" },
+    { value = "🚨 TEST", name = "🚨  TEST       Add or update tests", key = "t" },
+    { value = "⚡ PERF", name = "⚡  PERF       Performance improvements", key = "p" },
+    { value = "🔒 SECURITY", name = "🔒  SECURITY   Credential rotation, hardening", key = "k" },
+    { value = "📝 NOTE", name = "📝  NOTE       Administrative notes", key = "n" },
+    { value = "🚀 RELEASE", name = "🚀  RELEASE    Release or version bump", key = "v" },
+]
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "message"
+message = "Commit message:"

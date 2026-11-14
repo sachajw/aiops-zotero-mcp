@@ -1,0 +1,30 @@
+# Typecheck, lint, unit tests and build on every push and PR, with the tools pinned in mise.toml.
+# Live tests need a running Zotero, so they run locally: fnox exec -P shell -- mise run test:live
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          # Only what the build needs; lefthook, commitizen and gitleaks are for local hooks.
+          install_args: "node npm:npm"
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

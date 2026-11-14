@@ -1,0 +1,56 @@
+# Checks that every commit (and a PR's title, used for squash merges) follows .cz.toml.
+# commitizen's version is read from mise.toml so local hooks and CI run the same release.
+name: commitizen
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cz-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install commitizen (version from mise.toml)
+        run: |
+          version=$(sed -nE 's/^"pipx:commitizen" = "([^"]+)".*/\1/p' mise.toml)
+          test -n "$version" || { echo "pipx:commitizen not pinned in mise.toml"; exit 1; }
+          python -m pip install "commitizen==$version"
+
+      - name: Check commit messages
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            # First push of a branch: check all of its commits.
+            range="$PUSH_AFTER"
+          else
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          fi
+          echo "Checking $range"
+          cz check --rev-range "$range"
+
+      - name: Check PR title (becomes the squash-merge commit)
+        if: github.event_name == 'pull_request'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: cz check --message "$TITLE"

@@ -1,0 +1,36 @@
+# Tools and tasks for this repo. `mise install` once, then `mise run <task>`.
+[tools]
+# npm first so its bin wins on PATH over the npm bundled with node.
+# npm 10.9 (bundled with node 22) crashes resolving vitest 4.1's optional peers
+# ("Cannot read properties of null (reading 'edgesOut')"); npm 11 does not.
+"npm:npm" = "11.21.1"
+node = "22.23.5"
+lefthook = "2.2.2"
+"pipx:commitizen" = "4.19.3"
+gitleaks = "8.30.1"
+
+[tasks.install]
+description = "Install dependencies exactly as locked"
+run = "npm ci"
+
+[tasks.build]
+description = "Bundle the plugin and package build/aiops-zotero-mcp-<version>.xpi"
+run = "npm run build"
+
+[tasks.typecheck]
+run = "npm run typecheck"
+
+[tasks.lint]
+run = "npm run lint"
+
+[tasks.test]
+description = "Unit tests (no Zotero needed)"
+run = "npm test"
+
+[tasks."test:live"]
+description = "Live tests against a running Zotero with this plugin installed (needs ZOTERO_MCP_TOKEN)"
+run = "npm run test:live"
+
+[tasks.check]
+description = "Everything CI runs"
+depends = ["typecheck", "lint", "test", "build"]
