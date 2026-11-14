@@ -7,8 +7,10 @@ name = "cz_customize"
 tag_format = "v$version"
 version_scheme = "semver"
 version = "0.1.0"
-version_files = ["package.json:^  \"version\""]
+# updates.json: every occurrence of the current version (its version and update_link) is replaced.
+version_files = ["package.json:^  \"version\"", "updates.json"]
 update_changelog_on_bump = true
+bump_message = "🚀 RELEASE: v$new_version"
 major_version_zero = true
 
 [tool.commitizen.customize]
