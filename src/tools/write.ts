@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ToolError, defineTool } from "../mcp/tool.js";
 import {
   attachmentView,
+  count,
   collectionView,
   dryRunResult,
   getCollection,
@@ -331,13 +332,13 @@ export const setCollections = defineTool({
     const add = args.add.map((k) => getCollection(libraryID, k));
     const remove = args.remove.map((k) => getCollection(libraryID, k));
     const plan = { items: items.map((i) => i.key), add: add.map((c) => `${c.key} ${c.name}`), remove: remove.map((c) => `${c.key} ${c.name}`) };
-    if (args.dry_run) return dryRunResult(`Would change collections of ${items.length} items`, plan);
+    if (args.dry_run) return dryRunResult(`Would change collections of ${count(items.length, "item")}`, plan);
     for (const item of items) {
       add.forEach((c) => item.addToCollection(c.id));
       remove.forEach((c) => item.removeFromCollection(c.id));
       await item.saveTx();
     }
-    return { summary: `Updated collections of ${items.length} items`, data: plan };
+    return { summary: `Updated collections of ${count(items.length, "item")}`, data: plan };
   },
 });
 
@@ -358,13 +359,13 @@ export const setTags = defineTool({
     if (!args.add.length && !args.remove.length) throw new ToolError("Nothing to change: give add and/or remove");
     const items = args.item_keys.map((k) => getItem(libraryID, k));
     const plan = { items: items.map((i) => i.key), add: args.add, remove: args.remove };
-    if (args.dry_run) return dryRunResult(`Would change tags on ${items.length} items`, plan);
+    if (args.dry_run) return dryRunResult(`Would change tags on ${count(items.length, "item")}`, plan);
     for (const item of items) {
       args.add.forEach((t) => item.addTag(t));
       args.remove.forEach((t) => item.removeTag(t));
       await item.saveTx();
     }
-    return { summary: `Updated tags on ${items.length} items`, data: plan };
+    return { summary: `Updated tags on ${count(items.length, "item")}`, data: plan };
   },
 });
 
@@ -420,9 +421,9 @@ export const trashItems = defineTool({
     const alreadyTrashed = items.filter((i) => i.deleted).map((i) => i.key);
     if (alreadyTrashed.length) throw new ToolError(`Already in the trash: ${alreadyTrashed.join(", ")}`);
     const plan = items.map(itemSummary);
-    if (args.dry_run) return dryRunResult(`Would move ${items.length} items to the trash`, plan);
+    if (args.dry_run) return dryRunResult(`Would move ${count(items.length, "item")} to the trash`, plan);
     await Zotero.Items.trashTx(items.map((i) => i.id));
-    return { summary: `Moved ${items.length} items to the trash (restore with zotero_restore_items)`, data: plan };
+    return { summary: `Moved ${count(items.length, "item")} to the trash (restore with zotero_restore_items)`, data: plan };
   },
 });
 
@@ -438,12 +439,12 @@ export const restoreItems = defineTool({
     const notTrashed = items.filter((i) => !i.deleted).map((i) => i.key);
     if (notTrashed.length) throw new ToolError(`Not in the trash: ${notTrashed.join(", ")}`);
     const plan = items.map(itemSummary);
-    if (args.dry_run) return dryRunResult(`Would restore ${items.length} items`, plan);
+    if (args.dry_run) return dryRunResult(`Would restore ${count(items.length, "item")}`, plan);
     for (const item of items) {
       item.deleted = false;
       await item.saveTx();
     }
-    return { summary: `Restored ${items.length} items`, data: items.map(itemSummary) };
+    return { summary: `Restored ${count(items.length, "item")}`, data: items.map(itemSummary) };
   },
 });
 
@@ -461,7 +462,7 @@ export const trashCollection = defineTool({
     if (collection.deleted) throw new ToolError(`${collection.key} is already in the trash`);
     const sub = Zotero.Collections.getByParent(collection.id, true).filter((c) => !c.deleted);
     const plan = { collection: collectionView(collection), subcollections: sub.map((c) => `${c.key} ${c.name}`) };
-    if (args.dry_run) return dryRunResult(`Would move collection ${collection.key} and ${sub.length} subcollections to the trash`, plan);
+    if (args.dry_run) return dryRunResult(`Would move collection ${collection.key} and ${count(sub.length, "subcollection")} to the trash`, plan);
     collection.deleted = true;
     await collection.saveTx();
     return { summary: `Moved collection ${collection.key} "${collection.name}" to the trash (restore with zotero_restore_collection)`, data: plan };

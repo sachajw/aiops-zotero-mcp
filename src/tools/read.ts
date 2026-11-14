@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ToolError, defineTool } from "../mcp/tool.js";
 import {
   attachmentView,
+  count,
   collectionView,
   getCollection,
   getItem,
@@ -36,7 +37,7 @@ export const listLibraries = defineTool({
       editable: l.editable,
       isMyLibrary: l.libraryID === Zotero.Libraries.userLibraryID,
     }));
-    return { summary: `${libraries.length} libraries`, data: libraries };
+    return { summary: count(libraries.length, "library", "libraries"), data: libraries };
   },
 });
 
@@ -86,7 +87,7 @@ export const searchItems = defineTool({
     const items = await Zotero.Items.getAsync(page);
     const shown = items.length;
     return {
-      summary: `${ids.length} matching items; showing ${shown} from offset ${args.offset}`,
+      summary: `${count(ids.length, "matching item")}; showing ${shown} from offset ${args.offset}`,
       data: { total: ids.length, offset: args.offset, items: items.map(itemSummary) },
     };
   },
@@ -125,7 +126,7 @@ export const listCollections = defineTool({
       collections = Zotero.Collections.getByLibrary(libraryID, args.recursive);
     }
     const live = collections.filter((c) => !c.deleted);
-    return { summary: `${live.length} collections`, data: live.map(collectionView) };
+    return { summary: count(live.length, "collection"), data: live.map(collectionView) };
   },
 });
 
@@ -193,7 +194,7 @@ export const getAnnotations = defineTool({
         });
       }
     }
-    return { summary: `${out.length} annotations`, data: out };
+    return { summary: count(out.length, "annotation"), data: out };
   },
 });
 
@@ -265,7 +266,7 @@ export const listNotes = defineTool({
       dateModified: n.dateModified,
       text: noteText(n.getNote()),
     }));
-    return { summary: `${notes.length} notes on ${item.key}`, data: notes };
+    return { summary: `${count(notes.length, "note")} on ${item.key}`, data: notes };
   },
 });
 

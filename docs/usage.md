@@ -46,7 +46,7 @@ The port is Zotero's `httpServer.port` preference (23119 unless you changed it).
 
 ## 3. What to ask
 
-Ask in plain language; the agent picks the tools. Some examples across a library:
+Ask in plain language; the agent picks the tools. Some examples across a library (section 6 shows real calls and replies):
 
 **Find and read**
 - "What do I have in Zotero on transformer interpretability from the last five years?"
@@ -160,7 +160,598 @@ Required parameters are marked \*. Defaults in brackets. Every tool also takes `
 
 Creators are `{"creator_type": "author", "first_name": "Ada", "last_name": "Lovelace"}` or `{"creator_type": "author", "name": "Example Org"}`. Field names and creator types are checked against Zotero's schema for the item type; a wrong one comes back with the list of valid ones.
 
-## 6. When something fails
+## 6. Worked examples
+
+Real calls and replies, recorded against Zotero 10.0.9 on 2026-11-14 in a throwaway collection with two test items (since trashed). Item keys are from that run, so yours will differ. `<tmp>` stands for a temporary folder. In normal use you only type the request; the agent makes the calls.
+
+Setup for these examples: a collection "Worked examples" holding a journal article ("Attention Is All You Need", Vaswani & Shazeer, 2017) with a short text file as its full text, and a book ("Deep Learning", Goodfellow, Bengio & Courville, 2016).
+
+### 6.1 Find a paper and read it
+
+> Find the attention paper in my Worked examples collection and read it to me.
+
+**`zotero_search_items`**
+
+```json
+{
+  "query": "attention",
+  "collection_key": "2DJYJFH6"
+}
+```
+
+Reply:
+
+```text
+1 matching item; showing 1 from offset 0
+
+{
+  "total": 1,
+  "offset": 0,
+  "items": [
+    {
+      "key": "BFRPRRB9",
+      "itemType": "journalArticle",
+      "title": "Attention Is All You Need",
+      "creators": [
+        "Ashish Vaswani",
+        "Noam Shazeer"
+      ],
+      "date": "2017",
+      "attachments": 1,
+      "notes": 0
+    }
+  ]
+}
+```
+
+**`zotero_get_item`**
+
+```json
+{
+  "item_key": "BFRPRRB9"
+}
+```
+
+Reply:
+
+```text
+journalArticle BFRPRRB9: Attention Is All You Need
+
+{
+  "key": "BFRPRRB9",
+  "version": 0,
+  "itemType": "journalArticle",
+  "title": "Attention Is All You Need",
+  "date": "2017",
+  "volume": "30",
+  "publicationTitle": "Advances in Neural Information Processing Systems",
+  "creators": [
+    {
+      "firstName": "Ashish",
+      "lastName": "Vaswani",
+      "creatorType": "author"
+    },
+    {
+      "firstName": "Noam",
+      "lastName": "Shazeer",
+      "creatorType": "author"
+    }
+  ],
+  "tags": [
+    {
+      "tag": "transformers"
+    }
+  ],
+  "dateAdded": "2026-11-14T19:33:03Z",
+  "dateModified": "2026-11-14T19:33:03Z",
+  "libraryID": 1,
+  "collectionKeys": [
+    "2DJYJFH6"
+  ],
+  "inTrash": false,
+  "attachments": [
+    {
+      "key": "8DFQYVF7",
+      "title": "Full text",
+      "filename": "attention-notes.txt",
+      "contentType": "text/plain",
+  … (trimmed)
+```
+
+**`zotero_get_fulltext`**
+
+```json
+{
+  "item_key": "BFRPRRB9",
+  "max_chars": 120
+}
+```
+
+Reply:
+
+```text
+Text of 8DFQYVF7 (attention-notes.txt): characters 0–120 of 272. More: offset 120.
+
+{
+  "attachmentKey": "8DFQYVF7",
+  "totalChars": 272,
+  "offset": 0,
+  "text": "Example text standing in for the paper. The Transformer is based solely on attention mechanisms, dispensing with recurre"
+}
+```
+
+**`zotero_get_fulltext`**
+
+```json
+{
+  "item_key": "BFRPRRB9",
+  "offset": 120,
+  "max_chars": 200
+}
+```
+
+Reply:
+
+```text
+Text of 8DFQYVF7 (attention-notes.txt): characters 120–272 of 272.
+
+{
+  "attachmentKey": "8DFQYVF7",
+  "totalChars": 272,
+  "offset": 120,
+  "text": "nce and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable."
+}
+```
+
+The reader pages through long texts with `offset`; the first reply says where to continue.
+
+### 6.2 Cite
+
+> Give me an APA bibliography of both, then the in-text citations. Then try Vancouver.
+
+**`zotero_cite`**
+
+```json
+{
+  "item_keys": [
+    "BFRPRRB9",
+    "4AILHTX2"
+  ],
+  "style": "apa"
+}
+```
+
+Reply:
+
+```text
+bibliography in APA Style 7th edition, text:
+
+Goodfellow, I., Bengio, Y., & Courville, A. (2016). Deep Learning. MIT Press.
+Vaswani, A., & Shazeer, N. (2017). Attention Is All You Need. Advances in Neural Information Processing Systems, 30.
+```
+
+**`zotero_cite`**
+
+```json
+{
+  "item_keys": [
+    "BFRPRRB9",
+    "4AILHTX2"
+  ],
+  "kind": "citation",
+  "style": "apa"
+}
+```
+
+Reply:
+
+```text
+citation in APA Style 7th edition, text:
+
+(Vaswani & Shazeer, 2017)
+(Goodfellow et al., 2016)
+```
+
+**`zotero_cite`**
+
+```json
+{
+  "item_keys": [
+    "4AILHTX2"
+  ],
+  "style": "vancouverish"
+}
+```
+
+Reply (reported as an error):
+
+```text
+Style "vancouverish" is not installed. Installed: american-chemical-society, american-medical-association, apa, american-political-science-association, american-sociological-association, chicago-author-date, chicago-notes-bibliography, chicago-shortened-notes-bibliography, harvard-cite-them-right, elsevier-harvard, ieee, mhra-notes, modern-language-association, nature, nlm-citation-sequence
+```
+
+An unknown style is an error the agent can act on: the reply lists the styles installed in your Zotero.
+
+### 6.3 Add a file to an item and give it a sensible name
+
+> Attach scan_0042.txt to the Deep Learning book, show me first, then call it "Chapter 1" and rename the file goodfellow-2016-chapter-1.
+
+**`zotero_add_file`**
+
+```json
+{
+  "path": "<tmp>/scan_0042.txt",
+  "parent_item_key": "4AILHTX2",
+  "dry_run": true
+}
+```
+
+Reply:
+
+```text
+Dry run, nothing changed. Would import scan_0042.txt
+
+{
+  "path": "<tmp>/scan_0042.txt",
+  "mode": "import",
+  "title": "scan_0042.txt",
+  "bytes": 21,
+  "parentKey": "4AILHTX2",
+  "collectionKeys": []
+}
+```
+
+**`zotero_add_file`**
+
+```json
+{
+  "path": "<tmp>/scan_0042.txt",
+  "parent_item_key": "4AILHTX2"
+}
+```
+
+Reply:
+
+```text
+Added KVKWR7QT
+
+{
+  "key": "KVKWR7QT",
+  "title": "scan_0042.txt",
+  "filename": "scan_0042.txt",
+  "contentType": "text/plain",
+  "linkMode": "imported_file",
+  "fileExists": true,
+  "inTrash": false
+}
+```
+
+**`zotero_rename_attachment`**
+
+```json
+{
+  "item_key": "KVKWR7QT",
+  "title": "Chapter 1",
+  "filename": "goodfellow-2016-chapter-1"
+}
+```
+
+Reply:
+
+```text
+Renamed KVKWR7QT
+
+{
+  "before": {
+    "title": "scan_0042.txt",
+    "filename": "scan_0042.txt"
+  },
+  "after": {
+    "key": "KVKWR7QT",
+    "title": "Chapter 1",
+    "filename": "goodfellow-2016-chapter-1.txt",
+    "contentType": "text/plain",
+    "linkMode": "imported_file",
+    "fileExists": true,
+    "inTrash": false
+  }
+}
+```
+
+The file name kept its extension (`.txt`) because none was given. Renaming never overwrites an existing file.
+
+### 6.4 Reorganise, previewing first
+
+> Make a "To read" subcollection, move the book into it out of Worked examples, and tag both items review. Preview the move first.
+
+**`zotero_create_collection`**
+
+```json
+{
+  "name": "To read",
+  "parent_key": "2DJYJFH6"
+}
+```
+
+Reply:
+
+```text
+Created collection T2M4XIYS "To read"
+
+{
+  "key": "T2M4XIYS",
+  "name": "To read",
+  "parentKey": "2DJYJFH6",
+  "items": 0,
+  "subcollections": 0
+}
+```
+
+**`zotero_set_collections`**
+
+```json
+{
+  "item_keys": [
+    "4AILHTX2"
+  ],
+  "add": [
+    "T2M4XIYS"
+  ],
+  "remove": [
+    "2DJYJFH6"
+  ],
+  "dry_run": true
+}
+```
+
+Reply:
+
+```text
+Dry run, nothing changed. Would change collections of 1 item
+
+{
+  "items": [
+    "4AILHTX2"
+  ],
+  "add": [
+    "T2M4XIYS To read"
+  ],
+  "remove": [
+    "2DJYJFH6 Worked examples"
+  ]
+}
+```
+
+**`zotero_set_collections`**
+
+```json
+{
+  "item_keys": [
+    "4AILHTX2"
+  ],
+  "add": [
+    "T2M4XIYS"
+  ],
+  "remove": [
+    "2DJYJFH6"
+  ]
+}
+```
+
+Reply:
+
+```text
+Updated collections of 1 item
+
+{
+  "items": [
+    "4AILHTX2"
+  ],
+  "add": [
+    "T2M4XIYS To read"
+  ],
+  "remove": [
+    "2DJYJFH6 Worked examples"
+  ]
+}
+```
+
+**`zotero_set_tags`**
+
+```json
+{
+  "item_keys": [
+    "BFRPRRB9",
+    "4AILHTX2"
+  ],
+  "add": [
+    "review"
+  ]
+}
+```
+
+Reply:
+
+```text
+Updated tags on 2 items
+
+{
+  "items": [
+    "BFRPRRB9",
+    "4AILHTX2"
+  ],
+  "add": [
+    "review"
+  ],
+  "remove": []
+}
+```
+
+> What would change if I set the book's edition to 1 and the publisher to The MIT Press?
+
+**`zotero_update_item`**
+
+```json
+{
+  "item_key": "4AILHTX2",
+  "fields": {
+    "edition": "1",
+    "publisher": "The MIT Press"
+  },
+  "dry_run": true
+}
+```
+
+Reply:
+
+```text
+Dry run, nothing changed. Would update 4AILHTX2
+
+{
+  "changes": [
+    {
+      "field": "edition",
+      "from": "",
+      "to": "1"
+    },
+    {
+      "field": "publisher",
+      "from": "MIT Press",
+      "to": "The MIT Press"
+    }
+  ]
+}
+```
+
+A wrong field name is caught before anything changes, with the valid fields for that item type:
+
+**`zotero_create_item`**
+
+```json
+{
+  "item_type": "book",
+  "fields": {
+    "journal": "x"
+  },
+  "dry_run": true
+}
+```
+
+Reply (reported as an error):
+
+```text
+Not fields of book: journal. Valid: title, abstractNote, series, seriesNumber, volume, numberOfVolumes, edition, date, publisher, place, originalDate, originalPublisher, originalPlace, format, numPages, ISBN, DOI, citationKey, url, accessDate, ISSN, archive, archiveLocation, shortTitle, language, libraryCatalog, callNumber, rights, extra
+```
+
+### 6.5 Trash and restore
+
+> Trash the attention paper. … Actually, bring it back.
+
+**`zotero_trash_items`**
+
+```json
+{
+  "item_keys": [
+    "BFRPRRB9"
+  ],
+  "dry_run": true
+}
+```
+
+Reply:
+
+```text
+Dry run, nothing changed. Would move 1 item to the trash
+
+[
+  {
+    "key": "BFRPRRB9",
+    "itemType": "journalArticle",
+  … (trimmed)
+```
+
+**`zotero_trash_items`**
+
+```json
+{
+  "item_keys": [
+    "BFRPRRB9"
+  ]
+}
+```
+
+Reply:
+
+```text
+Moved 1 item to the trash (restore with zotero_restore_items)
+
+[
+  {
+    "key": "BFRPRRB9",
+    "itemType": "journalArticle",
+  … (trimmed)
+```
+
+**`zotero_search_items`**
+
+```json
+{
+  "query": "attention",
+  "collection_key": "2DJYJFH6",
+  "include_trashed": true
+}
+```
+
+Reply:
+
+```text
+1 matching item; showing 1 from offset 0
+
+{
+  "total": 1,
+  "offset": 0,
+  "items": [
+    {
+      "key": "BFRPRRB9",
+      "itemType": "journalArticle",
+      "title": "Attention Is All You Need",
+      "creators": [
+        "Ashish Vaswani",
+        "Noam Shazeer"
+      ],
+      "date": "2017",
+      "attachments": 1,
+      "notes": 0,
+      "inTrash": true
+    }
+  ]
+}
+```
+
+**`zotero_restore_items`**
+
+```json
+{
+  "item_keys": [
+    "BFRPRRB9"
+  ]
+}
+```
+
+Reply:
+
+```text
+Restored 1 item
+
+[
+  {
+    "key": "BFRPRRB9",
+    "itemType": "journalArticle",
+  … (trimmed)
+```
+
+Trashed items drop out of searches unless `include_trashed` is set, where they show `"inTrash": true`. Nothing is erased: the trash is only emptied from Zotero itself.
+
+## 7. When something fails
 
 | You see | Meaning | Fix |
 |---|---|---|
@@ -174,6 +765,6 @@ Creators are `{"creator_type": "author", "first_name": "Ada", "last_name": "Love
 
 Errors that the agent can fix come back as a tool result marked as an error, so it can correct itself. Unexpected failures are also written to Zotero's error console (Help → Debug Output Logging, or Tools → Developer → Error Console).
 
-## 7. Privacy
+## 8. Privacy
 
 Everything stays on this computer between your agent and Zotero. What leaves it is whatever the agent itself sends to its model provider, which includes the text of any item, note or PDF it reads. Leave Zotero's debug output logging off in normal use: when on, Zotero logs request headers, including the token.

@@ -161,6 +161,11 @@ export function textToNoteHtml(text: string): string {
     .join("\n");
 }
 
+/** "1 item", "3 items"; irregular plurals pass their own. */
+export function count(n: number, singular: string, plural = `${singular}s`): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 export function dryRunResult(summary: string, plan: unknown) {
   return { summary: `Dry run, nothing changed. ${summary}`, data: plan };
 }
