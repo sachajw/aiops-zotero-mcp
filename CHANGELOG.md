@@ -1,3 +1,9 @@
+## v0.2.0 (2026-11-17)
+
+### Features
+
+- zotero_retrieve_metadata runs Zotero's "Retrieve Metadata for PDF"
+
 ## v0.1.1 (2026-11-14)
 
 ### Builds
