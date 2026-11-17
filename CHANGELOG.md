@@ -1,3 +1,13 @@
+## v0.2.1 (2026-11-17)
+
+### Bug Fixes
+
+- zotero_retrieve_metadata reports slow items as pending instead of timing out
+
+### Docs
+
+- CLAUDE.md for agents; README covers pending results and the wait pref
+
 ## v0.2.0 (2026-11-17)
 
 ### Features
