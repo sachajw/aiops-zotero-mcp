@@ -124,7 +124,8 @@ Dry run, nothing changed. Would create collection "Example"
 
 - Zotero sends text from the first pages to its metadata service at zotero.org, looks up the DOI, ISBN or arXiv ID it finds, creates a parent item in the attachment's collections and moves the attachment under it.
 - The file may be renamed to match, depending on your Zotero file-renaming setting.
-- The reply lists, per attachment, the new parent or the reason nothing was found (for example, a scanned PDF with no text).
+- The reply gives each attachment a `status`: `recognized` (with the new parent), `not_recognized` (with the reason, for example a scanned PDF with no text) or `pending`.
+- The call waits at most `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (45 by default; set it in Zotero → Settings → Advanced → Config Editor). Anything Zotero hasn't finished by then is `pending`: it keeps running in Zotero, so check it later with `zotero_get_item` instead of sending it again. Keep the wait under your MCP client's tool timeout. Big PDFs and ISBN lookups that the catalogue is throttling are the slow ones.
 - Attachments that already have a parent, are not PDFs or EPUBs, or are in the trash are refused before anything runs. It is refused while Zotero is offline.
 - To undo, use the undo entry on the new parent's context menu in Zotero. It is offered for 24 hours, until the parent is edited or Zotero restarts.
 

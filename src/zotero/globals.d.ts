@@ -185,7 +185,11 @@ declare const Zotero: {
     recognizeItems(items: ZoteroAPI.Item[]): Promise<void>;
     canRecognize(item: ZoteroAPI.Item): boolean;
   };
-  /** xpcom/progressQueue.js; row status 3 = failed, 4 = succeeded. */
+  /** Bluebird, as Zotero ships it. */
+  Promise: {
+    delay(ms: number): Promise<void>;
+  };
+  /** xpcom/progressQueue.js; row status 1 = queued, 2 = processing, 3 = failed, 4 = succeeded. */
   ProgressQueues: {
     get(id: string): { getRows(): Array<{ id: number; status: number; message: string }> } | undefined;
   };

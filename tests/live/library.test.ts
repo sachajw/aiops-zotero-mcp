@@ -239,7 +239,7 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
       expect(dry.text).toMatch(/^Dry run/);
 
       const run = await ok("zotero_retrieve_metadata", { item_keys: [pdfKey] });
-      expect(run.data).toEqual([expect.objectContaining({ key: pdfKey, recognized: false })]);
+      expect(run.data).toEqual([expect.objectContaining({ key: pdfKey, status: "not_recognized" })]);
       const att = await ok("zotero_get_item", { item_key: pdfKey });
       expect((att.data as Record<string, unknown>).parentItem).toBeUndefined();
     });

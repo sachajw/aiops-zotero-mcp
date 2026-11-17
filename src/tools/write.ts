@@ -269,6 +269,19 @@ function unrecognizableReason(item: ZoteroAPI.Item): string | null {
   return null;
 }
 
+/** Zotero.ProgressQueue row statuses (xpcom/progressQueue.js). */
+const ROW_QUEUED = 1;
+const ROW_PROCESSING = 2;
+
+export const RETRIEVE_WAIT_PREF = "extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds";
+
+/** How long zotero_retrieve_metadata waits before reporting the rest as pending; must stay under the MCP client's tool timeout. */
+export function parseWaitSeconds(raw: unknown): number {
+  const n = raw === null || raw === undefined || raw === "" ? NaN : Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new ToolError(`${RETRIEVE_WAIT_PREF} must be a whole number of seconds ≥ 1 (got ${String(raw)})`);
+  return n;
+}
+
 export const retrieveMetadata = defineTool({
   name: "zotero_retrieve_metadata",
   title: "Retrieve metadata for PDFs/EPUBs",
@@ -276,7 +289,9 @@ export const retrieveMetadata = defineTool({
     "Run Zotero's own \"Retrieve Metadata for PDF\" on standalone PDF or EPUB attachments: Zotero sends text from the first pages " +
     "to its metadata service (zotero.org), looks up the DOI/ISBN/arXiv ID it finds, creates a parent item in the attachment's collections " +
     "and moves the attachment under it. The file may be renamed to match, per your Zotero file-renaming setting. " +
-    "Reports, per attachment, the new parent or why nothing was found. To undo, use the undo entry on the new parent's context menu in Zotero " +
+    "Reports, per attachment, the new parent, why nothing was found, or 'pending' if Zotero is still working on it when the wait " +
+    "(extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds, 45 by default) runs out; pending ones finish in Zotero, so check them later " +
+    "with zotero_get_item rather than resubmitting. To undo, use the undo entry on the new parent's context menu in Zotero " +
     "(offered for 24 hours, until the parent is edited or Zotero restarts); trashing the parent would trash the attachment with it.",
   input: z.object({
     item_keys: z.array(zKey).min(1).max(50).describe("Standalone PDF/EPUB attachment keys."),
@@ -297,7 +312,12 @@ export const retrieveMetadata = defineTool({
     // Zotero's queue waits (re-checking every minute) while offline; refuse instead of hanging the call.
     if (Zotero.HTTP.browserIsOffline()) throw new ToolError("Zotero is offline; metadata retrieval needs zotero.org");
 
-    await Zotero.RecognizeDocument.recognizeItems(items);
+    // Zotero's queue keeps going after we stop waiting, so a slow lookup (big PDF, throttled ISBN
+    // catalogue) can't hold the call past the client's timeout: report what's done, the rest as pending.
+    const waitSeconds = parseWaitSeconds(Zotero.Prefs.get(RETRIEVE_WAIT_PREF, true));
+    const recognizing = Zotero.RecognizeDocument.recognizeItems(items);
+    recognizing.catch((e: unknown) => Zotero.logError(e));
+    await Promise.race([recognizing, Zotero.Promise.delay(waitSeconds * 1000)]);
 
     // recognizeItems logs failures rather than throwing; the outcome is whether a parent now exists,
     // and the reason for a miss is the message on the item's row in Zotero's progress queue.
@@ -306,14 +326,20 @@ export const retrieveMetadata = defineTool({
       const att = getItem(libraryID, before.key);
       if (att.parentItemID) {
         const parent = getItem(libraryID, String(att.parentKey));
-        return { key: att.key, recognized: true, parent: itemSummary(parent), attachment: await attachmentView(att) };
+        return { key: att.key, status: "recognized", parent: itemSummary(parent), attachment: await attachmentView(att) };
       }
       const row = rows.find((r) => r.id === att.id);
-      return { key: att.key, recognized: false, reason: row?.message || "no match found" };
+      if (!row || row.status === ROW_QUEUED || row.status === ROW_PROCESSING) {
+        return { key: att.key, status: "pending", reason: "still running in Zotero; check later with zotero_get_item" };
+      }
+      return { key: att.key, status: "not_recognized", reason: row.message || "no match found" };
     }));
-    const found = results.filter((r) => r.recognized).length;
+    const tally = (s: string) => results.filter((r) => r.status === s).length;
+    const pending = tally("pending");
     return {
-      summary: `Retrieved metadata for ${found} of ${count(items.length, "attachment")}`,
+      summary:
+        `Retrieved metadata for ${tally("recognized")} of ${count(items.length, "attachment")}` +
+        (pending ? `; ${pending} still running in Zotero after ${waitSeconds}s` : ""),
       data: results,
     };
   },
