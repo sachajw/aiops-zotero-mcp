@@ -28,7 +28,7 @@ Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 | `zotero_trash_collection` / `zotero_restore_collection` | Collection and subcollections to/from the trash; items stay in the library |
 | `zotero_create_item` / `zotero_update_item` | Regular items; field names and creator types checked against Zotero's schema |
 | `zotero_add_file` | Import or link a local file, under an item or standalone in collections; Zotero's automatic metadata retrieval is suppressed while adding |
-| `zotero_retrieve_metadata` | Zotero's "Retrieve Metadata for PDF" on standalone PDFs/EPUBs: creates the parent item and reports any misses |
+| `zotero_retrieve_metadata` | Zotero's "Retrieve Metadata for PDF" on standalone PDFs/EPUBs: creates the parent item, reports misses, and returns anything still running after a bounded wait as `pending` |
 | `zotero_rename_attachment` | Title and/or file name; never overwrites |
 | `zotero_set_collections` / `zotero_set_tags` | Add/remove collections or tags on many items |
 | `zotero_add_note` | Child or standalone note, from plain text or HTML |
@@ -53,6 +53,8 @@ Items, collections and attachments are addressed by their 8-character Zotero key
 
 The port is Zotero's `httpServer.port` preference (23119 by default).
 
+Optional: `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (default 45) is how long `zotero_retrieve_metadata` waits before returning; keep it under your MCP client's tool timeout. Attachments still running then come back as `pending` and finish in Zotero.
+
 ## Security model
 
 - **Network:** Zotero's server listens on 127.0.0.1 only.
@@ -71,14 +73,15 @@ fnox exec -P shell -- mise run test:live   # every tool against your running Zot
 ```
 
 - **Layout:** `src/mcp/` holds the JSON-RPC/MCP core, `src/http/handler.ts` the transport rules (origin, auth, status codes), `src/tools/` the tools and `src/zotero/` the Zotero helpers and API types. `addon/` holds the plugin manifest, bootstrap and default prefs.
-- **Unit tests** cover the protocol, server and HTTP rules and need no Zotero.
+- **Unit tests** cover the protocol, server, HTTP rules and pure helpers, and need no Zotero. One file: `npx vitest run tests/unit/server.test.ts`; by name: `npx vitest run tests/unit -t "<name>"`.
 - **Live tests** work in a throwaway collection and move what they create to Zotero's trash. They skip when no endpoint or token is available.
 - **Commits** follow `.cz.toml` (emoji + LABEL), checked by the commit-msg hook and on GitHub.
 - **Versions:** `cz bump` updates `package.json`, and the build stamps that version into the manifest and `updates.json`.
+- **Agents:** `CLAUDE.md` describes the architecture and tool conventions for Claude Code.
 - **npm 11** is pinned because npm 10.9 (bundled with Node 22) crashes resolving vitest 4.1's optional peer dependencies.
 
 ## Limits
 
-- **Transport:** stateless JSON responses only. There's no server-to-client stream (GET answers 405), so no progress notifications.
+- **Transport:** stateless JSON responses only. There's no server-to-client stream (GET answers 405), so no progress notifications. Long `zotero_retrieve_metadata` runs return `pending` items instead; check them later with `zotero_get_item`.
 - **Updates:** `update_url` points at `updates.json` in this repo. While the repo is private, Zotero can't fetch it, so updates are manual (install the new `.xpi`).
 - **Group libraries:** read and write work where the group is editable, but `zotero_add_file` with `mode: "link"` is limited to My Library (Zotero's rule).
