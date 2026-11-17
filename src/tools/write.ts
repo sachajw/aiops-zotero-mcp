@@ -260,6 +260,65 @@ export const addFile = defineTool({
   },
 });
 
+/** Why Zotero's recogniser would skip this item, mirroring Zotero.RecognizeDocument.canRecognize; null if it can take it. */
+function unrecognizableReason(item: ZoteroAPI.Item): string | null {
+  if (!item.isAttachment()) return `is a ${item.itemType}, not an attachment`;
+  if (!item.isPDFAttachment() && !item.isEPUBAttachment()) return "is not a PDF or EPUB";
+  if (!item.isTopLevelItem()) return `already has a parent (${String(item.parentKey)})`;
+  if (item.deleted) return "is in the trash";
+  return null;
+}
+
+export const retrieveMetadata = defineTool({
+  name: "zotero_retrieve_metadata",
+  title: "Retrieve metadata for PDFs/EPUBs",
+  description:
+    "Run Zotero's own \"Retrieve Metadata for PDF\" on standalone PDF or EPUB attachments: Zotero sends text from the first pages " +
+    "to its metadata service (zotero.org), looks up the DOI/ISBN/arXiv ID it finds, creates a parent item in the attachment's collections " +
+    "and moves the attachment under it. The file may be renamed to match, per your Zotero file-renaming setting. " +
+    "Reports, per attachment, the new parent or why nothing was found. To undo, use the undo entry on the new parent's context menu in Zotero " +
+    "(offered for 24 hours, until the parent is edited or Zotero restarts); trashing the parent would trash the attachment with it.",
+  input: z.object({
+    item_keys: z.array(zKey).min(1).max(50).describe("Standalone PDF/EPUB attachment keys."),
+    dry_run: zDryRun,
+    library_id: zLibraryID,
+  }),
+  annotations: { ...WRITE, openWorldHint: true },
+  async run(args) {
+    const libraryID = libraryOf(args.library_id, { write: true });
+    const items = args.item_keys.map((k) => getItem(libraryID, k));
+    const refused = items.flatMap((i) => {
+      const reason = unrecognizableReason(i);
+      return reason ? [`${i.key} ${reason}`] : [];
+    });
+    if (refused.length) throw new ToolError(`Can't retrieve metadata: ${refused.join("; ")}`);
+    const plan = items.map(itemSummary);
+    if (args.dry_run) return dryRunResult(`Would retrieve metadata for ${count(items.length, "attachment")}`, plan);
+    // Zotero's queue waits (re-checking every minute) while offline; refuse instead of hanging the call.
+    if (Zotero.HTTP.browserIsOffline()) throw new ToolError("Zotero is offline; metadata retrieval needs zotero.org");
+
+    await Zotero.RecognizeDocument.recognizeItems(items);
+
+    // recognizeItems logs failures rather than throwing; the outcome is whether a parent now exists,
+    // and the reason for a miss is the message on the item's row in Zotero's progress queue.
+    const rows = Zotero.ProgressQueues.get("recognize")?.getRows() ?? [];
+    const results = await Promise.all(items.map(async (before) => {
+      const att = getItem(libraryID, before.key);
+      if (att.parentItemID) {
+        const parent = getItem(libraryID, String(att.parentKey));
+        return { key: att.key, recognized: true, parent: itemSummary(parent), attachment: await attachmentView(att) };
+      }
+      const row = rows.find((r) => r.id === att.id);
+      return { key: att.key, recognized: false, reason: row?.message || "no match found" };
+    }));
+    const found = results.filter((r) => r.recognized).length;
+    return {
+      summary: `Retrieved metadata for ${found} of ${count(items.length, "attachment")}`,
+      data: results,
+    };
+  },
+});
+
 export const renameAttachment = defineTool({
   name: "zotero_rename_attachment",
   title: "Rename attachment",
@@ -492,6 +551,7 @@ export const writeTools = [
   createItem,
   updateItem,
   addFile,
+  retrieveMetadata,
   renameAttachment,
   setCollections,
   setTags,

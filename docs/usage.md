@@ -118,6 +118,16 @@ Dry run, nothing changed. Would create collection "Example"
 - Give `parent_item_key` to attach it to an item, or `collection_keys` for a standalone attachment.
 - Zotero's "Automatically retrieve metadata for PDFs" is switched off while the file is added, so the PDF is not wrapped in a guessed parent item, and switched back to your setting afterwards.
 
+### Retrieving metadata
+
+`zotero_retrieve_metadata` runs Zotero's own "Retrieve Metadata for PDF" on standalone PDF or EPUB attachments.
+
+- Zotero sends text from the first pages to its metadata service at zotero.org, looks up the DOI, ISBN or arXiv ID it finds, creates a parent item in the attachment's collections and moves the attachment under it.
+- The file may be renamed to match, depending on your Zotero file-renaming setting.
+- The reply lists, per attachment, the new parent or the reason nothing was found (for example, a scanned PDF with no text).
+- Attachments that already have a parent, are not PDFs or EPUBs, or are in the trash are refused before anything runs. It is refused while Zotero is offline.
+- To undo, use the undo entry on the new parent's context menu in Zotero. It is offered for 24 hours, until the parent is edited or Zotero restarts.
+
 ### Reading long texts
 
 `zotero_get_fulltext` returns up to `max_chars` (default 20,000) and tells you the next `offset`. The agent can page through a whole book. Text comes from Zotero's full-text index, or is extracted from the PDF if it has not been indexed yet.
@@ -149,6 +159,7 @@ Required parameters are marked \*. Defaults in brackets. Every tool also takes `
 | `zotero_create_item` | `item_type`\*, `fields` [{}], `creators`, `tags`, `collection_keys` |
 | `zotero_update_item` | `item_key`\*, `fields` (empty string clears), `creators` (replaces all) |
 | `zotero_add_file` | `path`\* (absolute), `mode` [`import`] \| `link`, `title`, `parent_item_key`, `collection_keys` |
+| `zotero_retrieve_metadata` | `item_keys`\* (standalone PDF/EPUB attachments, up to 50) |
 | `zotero_rename_attachment` | `item_key`\*, `title`, `filename` (extension kept if omitted; never overwrites) |
 | `zotero_set_collections` | `item_keys`\*, `add` [], `remove` [] |
 | `zotero_set_tags` | `item_keys`\*, `add` [], `remove` [] |

@@ -1,7 +1,8 @@
 /**
  * Types for the parts of Zotero's privileged JavaScript API this plugin uses.
  * Checked against zotero/zotero chrome/content/zotero/xpcom (data/item.js, data/collection.js,
- * data/search.js, attachments.js, cite.js, style.js, server/server.js). Not exhaustive.
+ * data/search.js, attachments.js, cite.js, style.js, server/server.js, recognizeDocument.js,
+ * progressQueue.js). Not exhaustive.
  */
 
 declare namespace ZoteroAPI {
@@ -26,6 +27,9 @@ declare namespace ZoteroAPI {
     isAttachment(): boolean;
     isNote(): boolean;
     isAnnotation(): boolean;
+    isPDFAttachment(): boolean;
+    isEPUBAttachment(): boolean;
+    isTopLevelItem(): boolean;
     getField(field: string, unformatted?: boolean, includeBaseMapped?: boolean): string;
     setField(field: string, value: string | number): boolean;
     getDisplayTitle(): string;
@@ -174,6 +178,19 @@ declare const Zotero: {
       title?: string;
       collections?: number[];
     }): Promise<ZoteroAPI.Item>;
+  };
+  /** xpcom/recognizeDocument.js: what Zotero's "Retrieve Metadata for PDF" menu runs. */
+  RecognizeDocument: {
+    /** Queues the items and resolves when the queue is empty; failures are logged, not thrown. */
+    recognizeItems(items: ZoteroAPI.Item[]): Promise<void>;
+    canRecognize(item: ZoteroAPI.Item): boolean;
+  };
+  /** xpcom/progressQueue.js; row status 3 = failed, 4 = succeeded. */
+  ProgressQueues: {
+    get(id: string): { getRows(): Array<{ id: number; status: number; message: string }> } | undefined;
+  };
+  HTTP: {
+    browserIsOffline(): boolean;
   };
   Styles: {
     init(): Promise<void>;

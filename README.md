@@ -2,7 +2,7 @@
 
 An MCP server that runs **inside Zotero** as a plugin, so AI agents (Claude Code and other MCP clients) can manage and research your Zotero library: find items, read full text and annotations, cite, add and rename files, organise collections and tags, and trash or restore, all through typed tools rather than raw JavaScript.
 
-- **Inside Zotero:** uses Zotero's own JavaScript API, so files, attachments and the trash work the way they do in the app. No debug port, no cloud API, no API key.
+- **Inside Zotero:** uses Zotero's own JavaScript API, so files, attachments and the trash work the way they do in the app. No debug port, no cloud API, no API key. The one tool that goes online is `zotero_retrieve_metadata`, which uses Zotero's own metadata service exactly as the app's menu does.
 - **Localhost only:** served on Zotero's built-in server at `http://127.0.0.1:23119/aiops-mcp`. The plugin opens no socket of its own.
 - **Token required:** every request needs `Authorization: Bearer <token>`; with no token set, it refuses everything (503).
 - **Safe changes:** every change takes `dry_run: true` to preview it. Nothing is deleted permanently: trashing items or collections is undone by the restore tools, and libraries without a trash are refused.
@@ -28,6 +28,7 @@ Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 | `zotero_trash_collection` / `zotero_restore_collection` | Collection and subcollections to/from the trash; items stay in the library |
 | `zotero_create_item` / `zotero_update_item` | Regular items; field names and creator types checked against Zotero's schema |
 | `zotero_add_file` | Import or link a local file, under an item or standalone in collections; Zotero's automatic metadata retrieval is suppressed while adding |
+| `zotero_retrieve_metadata` | Zotero's "Retrieve Metadata for PDF" on standalone PDFs/EPUBs: creates the parent item and reports any misses |
 | `zotero_rename_attachment` | Title and/or file name; never overwrites |
 | `zotero_set_collections` / `zotero_set_tags` | Add/remove collections or tags on many items |
 | `zotero_add_note` | Child or standalone note, from plain text or HTML |

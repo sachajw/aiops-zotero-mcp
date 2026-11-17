@@ -121,7 +121,7 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
     it("lists all tools", async () => {
       const res = await post({ jsonrpc: "2.0", id: 1, method: "tools/list" });
       const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
-      expect(body.result.tools.length).toBe(22);
+      expect(body.result.tools.length).toBe(23);
     });
 
     it("answers 12 parallel calls, each with its own result", async () => {
@@ -219,6 +219,29 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
       await ok("zotero_rename_attachment", { item_key: attKey, title: "Renamed source", filename: "renamed-source" });
       const att = await ok("zotero_get_attachment", { item_key: attKey });
       expect(att.data).toMatchObject({ title: "Renamed source", filename: "renamed-source.txt", fileExists: true });
+    });
+
+    it("retrieves metadata only for standalone PDFs, and reports a miss", async () => {
+      const notAttachment = await tool("zotero_retrieve_metadata", { item_keys: [bookKey] });
+      expect(notAttachment.isError).toBe(true);
+      expect(notAttachment.text).toMatch(/not an attachment/);
+
+      // A PDF with no text: Zotero gives up before contacting its metadata service.
+      const path = join(fileDir, "blank.pdf");
+      writeFileSync(path, "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+        "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
+      const add = await ok("zotero_add_file", { path, collection_keys: [collectionKey] });
+      const pdfKey = (add.data as { key: string }).key;
+      created.push(pdfKey);
+      expect(add.data).toMatchObject({ contentType: "application/pdf" });
+
+      const dry = await ok("zotero_retrieve_metadata", { item_keys: [pdfKey], dry_run: true });
+      expect(dry.text).toMatch(/^Dry run/);
+
+      const run = await ok("zotero_retrieve_metadata", { item_keys: [pdfKey] });
+      expect(run.data).toEqual([expect.objectContaining({ key: pdfKey, recognized: false })]);
+      const att = await ok("zotero_get_item", { item_key: pdfKey });
+      expect((att.data as Record<string, unknown>).parentItem).toBeUndefined();
     });
 
     it("refuses a relative path", async () => {
