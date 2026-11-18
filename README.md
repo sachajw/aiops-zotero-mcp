@@ -38,7 +38,7 @@ Items, collections and attachments are addressed by their 8-character Zotero key
 
 ## Install
 
-1. Build: `mise install && mise run install && mise run build` gives `build/aiops-zotero-mcp-<version>.xpi`.
+1. Get the `.xpi`: download it from the [latest release](https://github.com/sachajw/aiops-zotero-mcp/releases/latest) (the repo is private, so use a signed-in browser or `gh release download --repo sachajw/aiops-zotero-mcp -p '*.xpi'`), or build it: `mise install && mise run install && mise run build` gives `build/aiops-zotero-mcp-<version>.xpi`.
 2. In Zotero: **Tools → Plugins → gear → Install Plugin From File…**, choose the `.xpi`.
 3. Create a token and store it in fnox (the value never needs to be shown):
    ```bash
@@ -52,6 +52,15 @@ Items, collections and attachments are addressed by their 8-character Zotero key
    ```
 
 The port is Zotero's `httpServer.port` preference (23119 by default).
+
+### Upgrade
+
+1. Install the new version's `.xpi` the same way (Tools → Plugins → gear → Install Plugin From File…). It replaces the installed one; Zotero doesn't need a restart, and the token preference is kept.
+2. Restart your MCP client if it doesn't show new or changed tools; Claude Code reads the tool list only at startup.
+
+Installing a local rebuild that keeps the same version number may leave the old file in place, so remove the plugin first (**⋯ → Remove**) or bump the version. To check what Zotero is running, compare `shasum` of `~/Library/Application Support/Zotero/Profiles/*/extensions/aiops-zotero-mcp@sachajw.github.io.xpi` with your `.xpi`.
+
+Versions before 0.2.2 could keep running an older plugin's code after a fresh install, because Zotero's startup cache served the previous bundle. 0.2.2 loads its code uncached, so upgrades from 0.2.2 on run the version you installed.
 
 Optional: `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (default 45) is how long `zotero_retrieve_metadata` waits before returning; keep it under your MCP client's tool timeout. Attachments still running then come back as `pending` and finish in Zotero.
 
@@ -76,12 +85,13 @@ fnox exec -P shell -- mise run test:live   # every tool against your running Zot
 - **Unit tests** cover the protocol, server, HTTP rules and pure helpers, and need no Zotero. One file: `npx vitest run tests/unit/server.test.ts`; by name: `npx vitest run tests/unit -t "<name>"`.
 - **Live tests** work in a throwaway collection and move what they create to Zotero's trash. They skip when no endpoint or token is available.
 - **Commits** follow `.cz.toml` (emoji + LABEL), checked by the commit-msg hook and on GitHub.
-- **Versions:** `cz bump` updates `package.json`, and the build stamps that version into the manifest and `updates.json`.
+- **Versions:** `cz bump` updates `package.json`, `updates.json` and `CHANGELOG.md` and tags `vX.Y.Z`; the build stamps that version into the manifest.
+- **Releases:** after `cz bump`, run `mise run build`, `git push --follow-tags`, then `gh release create vX.Y.Z build/aiops-zotero-mcp-X.Y.Z.xpi`. `updates.json` points at that release asset.
 - **Agents:** `CLAUDE.md` describes the architecture and tool conventions for Claude Code.
 - **npm 11** is pinned because npm 10.9 (bundled with Node 22) crashes resolving vitest 4.1's optional peer dependencies.
 
 ## Limits
 
 - **Transport:** stateless JSON responses only. There's no server-to-client stream (GET answers 405), so no progress notifications. Long `zotero_retrieve_metadata` runs return `pending` items instead; check them later with `zotero_get_item`.
-- **Updates:** `update_url` points at `updates.json` in this repo. While the repo is private, Zotero can't fetch it, so updates are manual (install the new `.xpi`).
+- **Updates:** `update_url` points at `updates.json` in this repo. While the repo is private, Zotero can't fetch it, so updates are manual (see [Upgrade](#upgrade)) and Zotero's "Allow automatic updates" setting has no effect.
 - **Group libraries:** read and write work where the group is editable, but `zotero_add_file` with `mode: "link"` is limited to My Library (Zotero's rule).

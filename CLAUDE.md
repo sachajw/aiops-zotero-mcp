@@ -18,7 +18,8 @@ fnox exec -P shell -- mise run test:live         # every tool against the runnin
 ```
 
 - **Live tests** (`tests/live/`) need the plugin installed in a running Zotero and `ZOTERO_MCP_TOKEN` (from fnox), and optionally `ZOTERO_MCP_URL`. Without them they skip; they don't fail. They work in a throwaway collection and trash what they create. CI runs only the unit tests.
-- **Trying a change in Zotero:** rebuild, then reinstall the `.xpi` (Tools → Plugins → Install Plugin From File, or the zotero-dev MCP `zotero_plugin_install`). Reinstalling replaces the running plugin; restart the MCP client connection afterwards if tools are missing.
+- **Trying a change in Zotero:** rebuild, then reinstall the `.xpi` (Tools → Plugins → Install Plugin From File, or the zotero-dev MCP `zotero_plugin_install`). Reinstalling replaces the running plugin; restart the MCP client connection afterwards if tools are missing (Claude Code reads the tool list only at startup). To confirm which build Zotero is running, compare `shasum` of `~/Library/Application Support/Zotero/Profiles/*/extensions/aiops-zotero-mcp@sachajw.github.io.xpi` with the one in `build/`; a rebuild that keeps the same version number may not replace the installed file, so remove the plugin first or bump the version.
+- `typecheck` covers `src/` only (`tsconfig.json` include); tests are type-checked by vitest, not tsc.
 
 ## Architecture
 
@@ -29,7 +30,8 @@ Request path: `addon/bootstrap.js` → `src/index.ts` → `src/http/handler.ts` 
 - **Transport (`src/http/handler.ts`):** stateless, JSON-only MCP Streamable HTTP. Checks run in this order before the body is read: `Origin` present → 403 (DNS-rebinding guard); no token configured → 503; wrong token → 401 (constant-time compare). GET answers 405, so there's no server stream and no progress notifications.
 - **MCP core (`src/mcp/`):** `protocol.ts` holds JSON-RPC types and protocol-version negotiation; `server.ts` handles `initialize`, `ping`, `tools/list` and `tools/call`. Tool input is validated with the tool's zod schema; `tools/list` publishes `z.toJSONSchema` output.
 - **Tools (`src/tools/read.ts`, `write.ts`):** each one is a `defineTool({...})` (`src/mcp/tool.ts`). To add a tool, define it and append it to the `readTools`/`writeTools` array at the bottom of the file. Conventions:
-  - Return `{ summary, data }`; the server serialises it as text (summary, then JSON).
+  - Return `{ summary, data }`; the server serialises it as text: summary, a blank line, then pretty JSON (`src/mcp/server.ts`). The live tests parse `data` by splitting on that first blank line, so keep summaries to one paragraph.
+  - A new tool also needs a row in the README tools table, an entry in `docs/usage.md` §5 (Tool reference), and coverage in `tests/live/library.test.ts`.
   - Throw `ToolError` for anything the caller can fix: it becomes an `isError` result the model can act on. Other exceptions are also returned as errors but logged with `Zotero.logError`.
   - Write tools take `zDryRun` and return `dryRunResult(...)` before changing anything; take `zLibraryID` and resolve it with `libraryOf(id, { write: true })`.
   - Nothing deletes permanently: removal is trash only (`requireTrash`), and restore tools undo it. No tool runs arbitrary JS or changes Zotero settings, except that `zotero_add_file` switches off `autoRecognizeFiles` while adding and restores it afterwards.
@@ -42,5 +44,6 @@ Request path: `addon/bootstrap.js` → `src/index.ts` → `src/http/handler.ts` 
 ## Commits and releases
 
 - Commit messages follow `.cz.toml`: `<emoji> <LABEL>: <description>`, e.g. `🐛 FIX: ...`, `✨ FEATURE: ...`. The lefthook `commit-msg` hook and `.github/workflows/commitizen.yml` both enforce it. Pre-commit runs gitleaks, eslint and `tsc --noEmit`.
-- Release with `cz bump`: it bumps `package.json` and `updates.json`, updates `CHANGELOG.md`, and commits as `🚀 RELEASE: vX.Y.Z` with tag `vX.Y.Z`. `manifest.json` gets the version at build time.
+- Release with `cz bump`: it bumps `package.json` and `updates.json`, updates `CHANGELOG.md`, and commits as `🚀 RELEASE: vX.Y.Z` with tag `vX.Y.Z`. `manifest.json` gets the version at build time. Then `mise run build`, `git push --follow-tags`, and `gh release create vX.Y.Z build/aiops-zotero-mcp-X.Y.Z.xpi`: `updates.json` points at that release asset.
+- `main` has no branch rules (GitHub offers none on this private free-plan repo), so commits go straight to `main` without a PR.
 - `updates.json` (committed) is the plugin's `update_url` target. While the repo is private Zotero can't fetch it, so updates are installed by hand.
