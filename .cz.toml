@@ -6,7 +6,7 @@
 name = "cz_customize"
 tag_format = "v$version"
 version_scheme = "semver"
-version = "0.2.1"
+version = "0.2.2"
 # updates.json: every occurrence of the current version (its version and update_link) is replaced.
 version_files = ["package.json:^  \"version\"", "updates.json"]
 update_changelog_on_bump = true

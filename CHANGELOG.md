@@ -1,3 +1,13 @@
+## v0.2.2 (2026-11-18)
+
+### Bug Fixes
+
+- load the bundle uncached so an upgrade never runs the previous version
+
+### Chores
+
+- track .gitattributes for graphify's graph.json merge driver
+
 ## v0.2.1 (2026-11-17)
 
 ### Bug Fixes
