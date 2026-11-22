@@ -6,7 +6,7 @@
 import { type AgentEvent, type PendingWrite, runAgent, trimHistory } from "../assistant/agent.js";
 import type { ContentBlock, MessageParam } from "../assistant/anthropic.js";
 import { chatSystem, keysIn, librarySystem } from "../assistant/chat.js";
-import { type ViewEntry, parseStoredChat, serializeChat, storeFileName } from "../assistant/store.js";
+import { type ViewEntry, deletedChatKeys, parseStoredChat, serializeChat, storeFileName } from "../assistant/store.js";
 import { resolveModel } from "../assistant/config.js";
 import { agentTools } from "../assistant/toolset.js";
 import { CancelledError, send } from "../assistant/transport.js";
@@ -369,8 +369,34 @@ async function ask(config: ChatConfig, input: HTMLTextAreaElement): Promise<void
   }
 }
 
+/** Forget a conversation and delete its saved file (e.g. its item was deleted). */
+function forget(key: string): void {
+  const chat = chats.get(key);
+  if (chat) stopChat(chat);
+  chats.delete(key);
+  const name = storeFileName(key);
+  if (name) void chatStore.remove(name).catch((e: unknown) => Zotero.logError(e));
+}
+
+let observerID: string | undefined;
+
+/** Delete an item's saved conversation when Zotero deletes the item (emptying the trash, not trashing). */
+export function watchDeletions(): void {
+  observerID = Zotero.Notifier.registerObserver(
+    {
+      notify: (event, _type, ids, extraData) => {
+        if (event === "delete") deletedChatKeys(ids.map(Number), extraData).forEach(forget);
+      },
+    },
+    ["item"],
+    "aiops-zotero-mcp",
+  );
+}
+
 /** Stop everything (plugin shutdown). */
 export function stopAllChats(): void {
+  if (observerID) Zotero.Notifier.unregisterObserver(observerID);
+  observerID = undefined;
   for (const chat of chats.values()) stopChat(chat);
   chats.clear();
   mounts.clear();

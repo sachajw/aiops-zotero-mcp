@@ -165,6 +165,14 @@ declare const Zotero: {
   /** Opens a URL in the system browser. */
   launchURL(url: string): void;
   DataDirectory: { dir: string };
+  Notifier: {
+    registerObserver(
+      observer: { notify(event: string, type: string, ids: Array<number | string>, extraData: Record<string, unknown>): void },
+      types: string[],
+      id?: string,
+    ): string;
+    unregisterObserver(id: string): void;
+  };
   getMainWindow(): (Window & typeof globalThis & {
     ZoteroPane: { itemPane?: { _itemDetails?: { scrollToPane(paneID: string): void } }; getSelectedItems(): ZoteroAPI.Item[] };
     MozXULElement: { insertFTLIfNeeded(file: string): void };

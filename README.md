@@ -102,7 +102,7 @@ Nothing changes until you click; the change runs through the same tools as the M
 - **Local proxies only:** `ANTHROPIC_BASE_URL` must be `127.0.0.1`, `localhost` or `[::1]`; anything else is refused.
 - **No stored secret:** the file is read on every request, so a rotated token or changed model takes effect at once; the plugin keeps no copy.
 - **Models:** tested with Claude (`claude-haiku-5-5`) and Z.ai through an Anthropic-format proxy (`glm-4.5-air`, `glm-4.7`, `glm-5.3`). Models that answer in text instead of calling the proposal tool may reply with the same JSON object; anything else is reported as an error.
-- **Saved conversations:** each chat is saved as a JSON file in `aiops-zotero-mcp/chats/` inside your Zotero data directory, after every turn. They hold your questions, the replies and what the tools returned (so excerpts of your library), stay on this computer, and aren't synced. **New chat** deletes that conversation's file; deleting the folder clears them all.
+- **Saved conversations:** each chat is saved as a JSON file in `aiops-zotero-mcp/chats/` inside your Zotero data directory, after every turn. They hold your questions, the replies and what the tools returned (so excerpts of your library), stay on this computer, and aren't synced. **New chat** deletes that conversation's file, and so does deleting the item permanently (trashing keeps it, since the item can come back); deleting the folder clears them all.
 - **What leaves Zotero:** the item's metadata and the start of its full text, sent to the proxy you configured; for tag and collection suggestions also your tag names and collection paths; in the chats, whatever their tools return (more of the text, annotations, notes, search results, change previews).
 
 ## Security model

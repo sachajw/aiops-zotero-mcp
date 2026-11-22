@@ -68,3 +68,11 @@ export function parseStoredChat(json: string): StoredChat | undefined {
   const { backend, messages, view } = parsed.data;
   return { ...(backend ? { backend } : {}), messages: messages as MessageParam[], view };
 }
+
+/** Conversation keys for items Zotero reports as deleted (Notifier "delete" extraData). */
+export function deletedChatKeys(ids: number[], extraData: Record<string, unknown>): string[] {
+  return ids.flatMap((id) => {
+    const d = extraData[String(id)] as { libraryID?: unknown; key?: unknown } | undefined;
+    return typeof d?.libraryID === "number" && typeof d.key === "string" ? [`item:${d.libraryID}:${d.key}`] : [];
+  });
+}

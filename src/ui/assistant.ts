@@ -31,7 +31,7 @@ import { runTool } from "../mcp/runner.js";
 import type { ToolDefinition } from "../mcp/tool.js";
 import { writeTools } from "../tools/write.js";
 import { collectionPath } from "../zotero/library.js";
-import { itemChatConfig, mountChat, stopAllChats, unmountChat } from "./chat.js";
+import { itemChatConfig, mountChat, stopAllChats, unmountChat, watchDeletions } from "./chat.js";
 import { backendSummary, button, checkbox, el } from "./dom.js";
 import { closeLibraryAssistant, openLibraryAssistant } from "./window.js";
 
@@ -315,6 +315,7 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
       },
     ],
   });
+  watchDeletions();
   toolsMenuID = Zotero.MenuManager.registerMenu({
     menuID: "aiops-assistant-tools",
     pluginID,

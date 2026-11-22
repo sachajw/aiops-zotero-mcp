@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_VIEW_ENTRIES, parseStoredChat, serializeChat, storeFileName } from "../../src/assistant/store.js";
+import { MAX_VIEW_ENTRIES, deletedChatKeys, parseStoredChat, serializeChat, storeFileName } from "../../src/assistant/store.js";
 
 describe("conversation store", () => {
   it("names files only for our keys", () => {
@@ -28,5 +28,11 @@ describe("conversation store", () => {
     expect(parseStoredChat("{")).toBeUndefined();
     expect(parseStoredChat(JSON.stringify({ version: 99, messages: [], view: [] }))).toBeUndefined();
     expect(parseStoredChat(JSON.stringify({ version: 1, messages: [{ role: "system", content: "x" }], view: [] }))).toBeUndefined();
+  });
+});
+
+describe("deletedChatKeys", () => {
+  it("maps Zotero's delete notification to conversation keys", () => {
+    expect(deletedChatKeys([2880, 2881, 2882], { "2880": { libraryID: 1, key: "72GVU45X" }, "2881": {} })).toEqual(["item:1:72GVU45X"]);
   });
 });
