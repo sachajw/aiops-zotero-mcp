@@ -288,6 +288,25 @@ function unrecognizableReason(item: ZoteroAPI.Item): string | null {
 const ROW_QUEUED = 1;
 const ROW_PROCESSING = 2;
 
+/**
+ * What an attachment without a new parent ended up as. Its row in Zotero's progress queue has a
+ * final status and message once Zotero is done with it; a row still queued or processing is
+ * pending, unless the whole run already failed, in which case nothing will finish it.
+ */
+export function unfinishedOutcome(
+  row: { status: number; message?: string } | undefined,
+  failure: { error: unknown } | undefined,
+): { status: "not_recognized" | "failed" | "pending"; reason: string } {
+  if (row && row.status !== ROW_QUEUED && row.status !== ROW_PROCESSING) {
+    return { status: "not_recognized", reason: row.message || "no match found" };
+  }
+  if (failure) {
+    const message = failure.error instanceof Error ? failure.error.message : String(failure.error);
+    return { status: "failed", reason: `Zotero's metadata retrieval stopped with an error: ${message}. Retry with zotero_retrieve_metadata` };
+  }
+  return { status: "pending", reason: "still running in Zotero; check later with zotero_get_item" };
+}
+
 export const RETRIEVE_WAIT_PREF = "extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds";
 
 /** How long zotero_retrieve_metadata waits before reporting the rest as pending; must stay under the MCP client's tool timeout. */
@@ -330,8 +349,12 @@ export const retrieveMetadata = defineTool({
     // Zotero's queue keeps going after we stop waiting, so a slow lookup (big PDF, throttled ISBN
     // catalogue) can't hold the call past the client's timeout: report what's done, the rest as pending.
     const waitSeconds = parseWaitSeconds(Zotero.Prefs.get(RETRIEVE_WAIT_PREF, true));
-    const recognizing = Zotero.RecognizeDocument.recognizeItems(items);
-    recognizing.catch((e: unknown) => Zotero.logError(e));
+    // Settle rather than throw: a failure mid-run must still report what each attachment ended up as.
+    let failure: { error: unknown } | undefined;
+    const recognizing = Zotero.RecognizeDocument.recognizeItems(items).catch((error: unknown) => {
+      failure = { error };
+      Zotero.logError(error);
+    });
     await Promise.race([recognizing, Zotero.Promise.delay(waitSeconds * 1000)]);
 
     // recognizeItems logs failures rather than throwing; the outcome is whether a parent now exists,
@@ -343,18 +366,15 @@ export const retrieveMetadata = defineTool({
         const parent = getItem(libraryID, String(att.parentKey));
         return { key: att.key, status: "recognized", parent: itemSummary(parent), attachment: await attachmentView(att) };
       }
-      const row = rows.find((r) => r.id === att.id);
-      if (!row || row.status === ROW_QUEUED || row.status === ROW_PROCESSING) {
-        return { key: att.key, status: "pending", reason: "still running in Zotero; check later with zotero_get_item" };
-      }
-      return { key: att.key, status: "not_recognized", reason: row.message || "no match found" };
+      return { key: att.key, ...unfinishedOutcome(rows.find((r) => r.id === att.id), failure) };
     }));
     const tally = (s: string) => results.filter((r) => r.status === s).length;
     const pending = tally("pending");
     return {
       summary:
         `Retrieved metadata for ${tally("recognized")} of ${count(items.length, "attachment")}` +
-        (pending ? `; ${pending} still running in Zotero after ${waitSeconds}s` : ""),
+        (pending ? `; ${pending} still running in Zotero after ${waitSeconds}s` : "") +
+        (tally("failed") ? `; ${tally("failed")} stopped by an error in Zotero's metadata retrieval` : ""),
       data: results,
     };
   },
@@ -402,7 +422,16 @@ export const renameAttachment = defineTool({
     }
     if (args.title && args.title !== before.title) {
       att.setField("title", args.title);
-      await att.saveTx();
+      try {
+        await att.saveTx();
+      } catch (error) {
+        if (filename && filename !== before.filename) {
+          // The file is already renamed on disk; say so, or the caller assumes nothing changed.
+          const why = error instanceof Error ? error.message : String(error);
+          throw new ToolError(`Renamed the file to ${filename}, but saving the new title failed (${why}); the title is still "${before.title}"`);
+        }
+        throw error;
+      }
     }
     return { summary: `Renamed ${att.key}`, data: { before, after: await attachmentView(att) } };
   },

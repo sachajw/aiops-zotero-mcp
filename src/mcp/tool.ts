@@ -37,9 +37,13 @@ export interface ToolDefinition<S extends z.ZodObject = z.ZodObject> {
   run: (args: z.infer<S>) => Promise<ToolOutput>;
 }
 
-/** Keeps the input type tied to the schema at the definition site. */
+/**
+ * Keeps the input type tied to the schema at the definition site, and makes the input strict:
+ * zod's default silently drops unknown keys, so a misspelled filter would just be ignored.
+ * Strict also publishes additionalProperties: false in tools/list.
+ */
 export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ToolDefinition<S> {
-  return def;
+  return { ...def, input: def.input.strict() as unknown as S };
 }
 
 /** JSON Schema for tools/list. Zod 4 emits draft 2020-12, the MCP default dialect. */

@@ -166,6 +166,12 @@ export function count(n: number, singular: string, plural = `${singular}s`): str
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
+/** Paging fields for a slice of `shown` entries starting at `offset`, out of `total`. */
+export function nextPage(offset: number, shown: number, total: number): { hasMore: boolean; nextOffset: number | null } {
+  const next = offset + shown;
+  return next < total ? { hasMore: true, nextOffset: next } : { hasMore: false, nextOffset: null };
+}
+
 export function dryRunResult(summary: string, plan: unknown) {
   return { summary: `Dry run, nothing changed. ${summary}`, data: plan };
 }

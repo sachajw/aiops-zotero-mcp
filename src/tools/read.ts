@@ -9,6 +9,7 @@ import {
   itemDetail,
   itemSummary,
   libraryOf,
+  nextPage,
   noteText,
   zKey,
   zLibraryID,
@@ -87,9 +88,11 @@ export const searchItems = defineTool({
     const page = ids.slice(args.offset, args.offset + args.limit);
     const items = await Zotero.Items.getAsync(page);
     const shown = items.length;
+    const more = nextPage(args.offset, shown, ids.length);
     return {
-      summary: `${count(ids.length, "matching item")}; showing ${shown} from offset ${args.offset}`,
-      data: { total: ids.length, offset: args.offset, items: items.map(itemSummary) },
+      summary: `${count(ids.length, "matching item")}; showing ${shown} from offset ${args.offset}` +
+        (more.hasMore ? `. More: offset ${more.nextOffset}.` : ""),
+      data: { total: ids.length, offset: args.offset, ...more, items: items.map(itemSummary) },
     };
   },
 });
@@ -157,15 +160,20 @@ export const getFulltext = defineTool({
   async run(args) {
     const libraryID = libraryOf(args.library_id);
     for (const att of await attachmentsFor(libraryID, args.item_key)) {
+      // attachmentText throws (rather than returning nothing) for a PDF whose file is missing,
+      // so check the file first and move on to the next attachment.
+      const path = await att.getFilePathAsync();
+      if (!path || !(await IOUtils.exists(path))) continue;
       const text = await att.attachmentText;
       if (!text) continue;
       const slice = text.slice(args.offset, args.offset + args.max_chars);
       const next = args.offset + slice.length;
+      const more = nextPage(args.offset, slice.length, text.length);
       return {
         summary:
           `Text of ${att.key} (${att.attachmentFilename || att.getField("title")}): characters ${args.offset}–${next} of ${text.length}` +
-          (next < text.length ? `. More: offset ${next}.` : "."),
-        data: { attachmentKey: att.key, totalChars: text.length, offset: args.offset, text: slice },
+          (more.hasMore ? `. More: offset ${more.nextOffset}.` : "."),
+        data: { attachmentKey: att.key, totalChars: text.length, offset: args.offset, ...more, text: slice },
       };
     }
     throw new ToolError(`No readable text for ${args.item_key}: not indexed, or the file is missing or not a text format`);

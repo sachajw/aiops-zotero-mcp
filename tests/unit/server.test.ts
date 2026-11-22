@@ -64,6 +64,7 @@ describe("McpServer", () => {
     expect(schema.type).toBe("object");
     expect(schema.$schema).toBeUndefined();
     expect(schema.required).toEqual(["word"]);
+    expect(schema.additionalProperties).toBe(false);
     expect(tools[0].annotations).toEqual({ title: "Echo", readOnlyHint: true });
   });
 
@@ -81,6 +82,12 @@ describe("McpServer", () => {
     const res = await server().handleRequest(call("echo", { word: "" }));
     expect(res).toMatchObject({ result: { isError: true } });
     if ("result" in res) expect((res.result.content as Array<{ text: string }>)[0].text).toMatch(/Invalid arguments for echo/);
+  });
+
+  it("rejects a misspelled argument instead of silently ignoring it", async () => {
+    const res = await server().handleRequest(call("echo", { word: "hi", tmes: 2 }));
+    expect(res).toMatchObject({ result: { isError: true } });
+    if ("result" in res) expect((res.result.content as Array<{ text: string }>)[0].text).toMatch(/Unrecognized key.*tmes/);
   });
 
   it("returns -32602 for an unknown tool", async () => {
