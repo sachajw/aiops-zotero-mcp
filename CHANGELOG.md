@@ -1,3 +1,9 @@
+## v0.8.0 (2026-11-22)
+
+### Features
+
+- plugin changes can be undone with Zotero's Edit → Undo
+
 ## v0.7.0 (2026-11-22)
 
 ### Bug Fixes
