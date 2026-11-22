@@ -1,3 +1,15 @@
+## v0.13.1 (2026-11-22)
+
+### Bug Fixes
+
+- actions default to sonnet, and the Z.ai preset's sonnet tier is glm-5.3
+
+### Docs
+
+- README: model comparison results for the actions
+- CLAUDE.md: related items and long-running zotero-dev jobs
+- README explains which model each Assistant feature uses
+
 ## v0.13.0 (2026-11-22)
 
 ### Docs
