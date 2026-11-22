@@ -145,6 +145,8 @@ declare namespace ZoteroUI {
   }
   interface MenuContext {
     items?: ZoteroAPI.Item[];
+    /** main/library/collection: the selected rows; ref is the collection for collection rows. */
+    collectionTreeRows?: Array<{ isCollection(): boolean; ref: ZoteroAPI.Collection }>;
     setEnabled(enabled: boolean): void;
     setVisible(visible: boolean): void;
   }
@@ -163,6 +165,7 @@ declare const Zotero: {
   getMainWindow(): (Window & typeof globalThis & {
     ZoteroPane: { itemPane?: { _itemDetails?: { scrollToPane(paneID: string): void } }; getSelectedItems(): ZoteroAPI.Item[] };
     MozXULElement: { insertFTLIfNeeded(file: string): void };
+    openDialog(url: string, name: string, features: string): Window | null;
   }) | null;
   ItemPaneManager: {
     /** Returns the registered key, or false if the options were refused. */

@@ -7,7 +7,7 @@ export default tseslint.config(
   ...tseslint.configs.strict,
   {
     files: ["addon/**/*.js"],
-    languageOptions: { sourceType: "script", globals: { Services: "readonly", Zotero: "readonly", pref: "readonly" } },
+    languageOptions: { sourceType: "script", globals: { Services: "readonly", Zotero: "readonly", pref: "readonly", Cc: "readonly", Ci: "readonly" } },
     // startup/shutdown/install/uninstall are called by Zotero, not from this file.
     rules: { "no-unused-vars": "off", "@typescript-eslint/no-unused-vars": "off" },
   },

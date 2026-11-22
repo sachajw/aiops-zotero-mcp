@@ -87,3 +87,47 @@ describe.skipIf(!files.length)("item chat against live proxies", () => {
     }, 240_000);
   }
 });
+
+import { librarySystem } from "../../src/assistant/chat.js";
+import { writeTools } from "../../src/tools/write.js";
+
+describe.skipIf(!files.length)("library assistant against live proxies", () => {
+  for (const file of files) {
+    const backend = parseProfile(readFileSync(file, "utf8"), file);
+    const model = resolveModel(backend, process.env.AIOPS_LLM_MODEL ?? "sonnet");
+
+    it(`${backend.label} (${model}) asks for approval before tagging, with the right arguments`, async () => {
+      // Real schemas, fake runs: searches find one item; writes echo their arguments.
+      const tools = agentTools([...readTools, ...writeTools] as never, { writes: true }).map((t) => ({
+        ...t,
+        run: async (input: Record<string, unknown>) => {
+          if (!t.write) return { text: `${t.param.name}: 1 matching item\n{"items":[{"key":"KXPT7Q2M","itemType":"book","title":"Kubernetes Patterns"}]}`, isError: false };
+          // Like the real add/remove tools: a call that changes nothing is an error, even as a dry run.
+          const empty = (v: unknown) => !Array.isArray(v) || v.length === 0;
+          if (["zotero_set_tags", "zotero_set_collections"].includes(t.param.name) && empty(input.add) && empty(input.remove)) {
+            return { text: "Nothing to change: give add and/or remove", isError: true };
+          }
+          return { text: `${input.dry_run ? "Dry run, nothing changed. Would" : "Did"} ${t.param.name} ${JSON.stringify(input)}`, isError: false, args: input };
+        },
+      }));
+      const approvals: Array<{ tool: string; args: Record<string, unknown> }> = [];
+      const out = await runAgent([{ role: "user", content: "Find my book 'Kubernetes Patterns' and add the tag Kubernetes to it." }], {
+        send: (req, onText) => send(deps, backend, req, { timeoutSeconds: 120, onText }),
+        request: { model, max_tokens: 4096, system: librarySystem() },
+        tools,
+        maxIterations: 6,
+        maxToolResultChars: 5000,
+        approve: async (p) => {
+          approvals.push({ tool: p.tool, args: p.args });
+          return true;
+        },
+        onEvent: () => {},
+        isCancelled: () => false,
+      });
+      expect(approvals.length).toBe(1);
+      expect(approvals[0].tool).toBe("zotero_set_tags");
+      expect(approvals[0].args).toMatchObject({ item_keys: ["KXPT7Q2M"], add: ["Kubernetes"], dry_run: true });
+      expect(out.text.length).toBeGreaterThan(0);
+    }, 240_000);
+  }
+});

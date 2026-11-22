@@ -30,8 +30,10 @@ import {
 import { runTool } from "../mcp/runner.js";
 import type { ToolDefinition } from "../mcp/tool.js";
 import { writeTools } from "../tools/write.js";
-import { mountChat, stopAllChats, unmountChat } from "./chat.js";
+import { collectionPath } from "../zotero/library.js";
+import { itemChatConfig, mountChat, stopAllChats, unmountChat } from "./chat.js";
 import { backendSummary, button, checkbox, el } from "./dom.js";
+import { closeLibraryAssistant, openLibraryAssistant } from "./window.js";
 
 type ActionKind = "summary" | "tags" | "collections";
 
@@ -51,6 +53,8 @@ const states = new Map<number, PaneState>();
 const mounts = new Map<HTMLElement, { itemID: number; doc: Document }>();
 let sectionKey: string | false = false;
 let menuID: string | false = false;
+let toolsMenuID: string | false = false;
+let collectionMenuID: string | false = false;
 let prefPaneID: string | undefined;
 
 // ------------------------------------------------------------------ actions
@@ -142,9 +146,9 @@ function render(body: HTMLElement, doc: Document, itemID: number): void {
   // actions area is redrawn on every change.
   if (body.dataset.aiopsItem !== String(itemID)) {
     const chatArea = el(doc, "div");
-    body.replaceChildren(el(doc, "div"), chatArea);
+    body.replaceChildren(el(doc, "div"), el(doc, "div", "Chat", "font-weight: 600; margin-top: 8px;"), chatArea);
     body.dataset.aiopsItem = String(itemID);
-    mountChat(chatArea, doc, itemID, rerenderAll);
+    mountChat(chatArea, doc, itemChatConfig(item), rerenderAll);
   }
   const area = body.firstElementChild as HTMLElement;
   area.replaceChildren();
@@ -311,6 +315,33 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
       },
     ],
   });
+  toolsMenuID = Zotero.MenuManager.registerMenu({
+    menuID: "aiops-assistant-tools",
+    pluginID,
+    target: "main/menubar/tools",
+    menus: [{ menuType: "menuitem", l10nID: "aiops-library-assistant", onCommand: () => openLibraryAssistant() }],
+  });
+  collectionMenuID = Zotero.MenuManager.registerMenu({
+    menuID: "aiops-assistant-collection",
+    pluginID,
+    target: "main/library/collection",
+    menus: [
+      {
+        menuType: "menuitem",
+        l10nID: "aiops-assistant-ask-collection",
+        onShowing: (_event, ctx) => {
+          const rows = ctx.collectionTreeRows ?? [];
+          ctx.setVisible(rows.length === 1 && rows[0].isCollection());
+        },
+        onCommand: (_event, ctx) => {
+          const row = ctx.collectionTreeRows?.[0];
+          if (!row?.isCollection()) return;
+          const path = collectionPath(row.ref, (id) => Zotero.Collections.get(id));
+          openLibraryAssistant(`About the collection "${path}" (${row.ref.key}): `);
+        },
+      },
+    ],
+  });
   const win = Zotero.getMainWindow();
   if (win) addStrings(win);
   // The Settings pane's Test connection button calls this (its script runs in the Settings window).
@@ -331,8 +362,9 @@ export function unregisterAssistant(): void {
   states.clear();
   mounts.clear();
   if (sectionKey) Zotero.ItemPaneManager.unregisterSection(sectionKey);
-  if (menuID) Zotero.MenuManager.unregisterMenu(menuID);
-  sectionKey = menuID = false;
+  for (const id of [menuID, toolsMenuID, collectionMenuID]) if (id) Zotero.MenuManager.unregisterMenu(id);
+  sectionKey = menuID = toolsMenuID = collectionMenuID = false;
+  closeLibraryAssistant();
   if (prefPaneID) Zotero.PreferencePanes.unregister(prefPaneID);
   prefPaneID = undefined;
   Reflect.deleteProperty(Zotero, "AiopsZoteroMcp");

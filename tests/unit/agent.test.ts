@@ -157,3 +157,17 @@ describe("agentTools", () => {
     expect((await t.run({ m: 1 })).isError).toBe(true);
   });
 });
+
+import { keysIn, librarySystem } from "../../src/assistant/chat.js";
+
+describe("library assistant helpers", () => {
+  it("finds Zotero keys in a preview, once each, in order", () => {
+    expect(keysIn('Would update collections of 2 items {"items":["ABCD2345","EFGH2345"],"add":["ABCD2345 Kubernetes"]} OBVIOUSLYNOT abcd2345 ABCD0345')).toEqual(["ABCD2345", "EFGH2345"]);
+  });
+
+  it("tells the model every change waits for approval and not to fake results", () => {
+    const s = librarySystem();
+    expect(s).toMatch(/runs only if they approve/);
+    expect(s).toMatch(/Never say a change was made unless a tool result says so/);
+  });
+});

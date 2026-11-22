@@ -109,3 +109,12 @@ export async function testConnection(): Promise<string> {
   const reply = await send(transportDeps(), settings.backend, { model, max_tokens: 1024, messages: [{ role: "user", content: "Reply with just: OK" }] }, { timeoutSeconds: settings.timeoutSeconds });
   return `OK: ${reply.model ?? model} via ${settings.backend.label} answered in ${((Date.now() - started) / 1000).toFixed(1)}s.`;
 }
+
+/** "KEY: title" for an item or "KEY: collection path" for a collection; undefined if it's neither. */
+export function describeKey(libraryID: number, key: string): string | undefined {
+  const item = Zotero.Items.getByLibraryAndKey(libraryID, key);
+  if (item) return `${key}: ${item.getDisplayTitle()}${item.deleted ? " (in the trash)" : ""}`;
+  const collection = Zotero.Collections.getByLibraryAndKey(libraryID, key);
+  if (collection) return `${key}: collection ${collectionPath(collection, (id) => Zotero.Collections.get(id))}`;
+  return undefined;
+}

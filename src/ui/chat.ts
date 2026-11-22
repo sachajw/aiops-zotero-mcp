@@ -1,24 +1,45 @@
 /**
- * Chat about the open item, in the Assistant section. One conversation per item, kept in memory
- * while Zotero runs. The model can read the library (read-only tools), not change it.
+ * Chats: one about the open item (in the Assistant section; read-only) and the library assistant
+ * (its own window; can change the library, but only after the user approves each change).
+ * Conversations are kept in memory while Zotero runs.
  */
-import { type AgentEvent, runAgent, trimHistory } from "../assistant/agent.js";
+import { type AgentEvent, type PendingWrite, runAgent, trimHistory } from "../assistant/agent.js";
 import type { ContentBlock, MessageParam } from "../assistant/anthropic.js";
-import { chatSystem } from "../assistant/chat.js";
+import { chatSystem, keysIn, librarySystem } from "../assistant/chat.js";
 import { resolveModel } from "../assistant/config.js";
 import { agentTools } from "../assistant/toolset.js";
 import { CancelledError, send } from "../assistant/transport.js";
-import { actionSettings, itemContext, numberPref, stringPref, transportDeps } from "../assistant/zotero.js";
+import { actionSettings, describeKey, itemContext, numberPref, stringPref, transportDeps } from "../assistant/zotero.js";
 import type { ToolDefinition } from "../mcp/tool.js";
 import { readTools } from "../tools/read.js";
+import { writeTools } from "../tools/write.js";
 import { backendPicker, button, el } from "./dom.js";
 
 /** Conversation size kept below this many characters, trimming old tool output first. */
 const HISTORY_CHARS = 300_000;
+const READ_TOOLS = readTools as unknown as ToolDefinition[];
+const ALL_TOOLS = [...readTools, ...writeTools] as unknown as ToolDefinition[];
+
+export interface ChatConfig {
+  /** Which conversation: "item:<id>" or "library". */
+  key: string;
+  /** Whether the model may propose changes (each needs approval). */
+  writes: boolean;
+  placeholder: string;
+  system(): Promise<string>;
+  /** The library whose keys the approval card resolves. */
+  libraryID: number;
+}
 
 type ViewEntry =
   | { role: "user"; text: string }
   | { role: "assistant"; text: string; tools: string[]; note?: string; error?: boolean };
+
+interface Pending {
+  write: PendingWrite;
+  legend: string[];
+  resolve(approved: boolean): void;
+}
 
 interface Chat {
   system?: string;
@@ -29,11 +50,12 @@ interface Chat {
   running: boolean;
   cancelled: boolean;
   cancel?: () => void;
+  pending?: Pending;
   draft: string;
 }
 
 interface Mount {
-  itemID: number;
+  config: ChatConfig;
   doc: Document;
   log: HTMLElement;
   input: HTMLTextAreaElement;
@@ -42,17 +64,39 @@ interface Mount {
   newChat: HTMLButtonElement;
 }
 
-const chats = new Map<number, Chat>();
+const chats = new Map<string, Chat>();
 const mounts = new Map<HTMLElement, Mount>();
-const READ_TOOLS = readTools as unknown as ToolDefinition[];
 
-function chatFor(itemID: number): Chat {
-  let chat = chats.get(itemID);
+function chatFor(key: string): Chat {
+  let chat = chats.get(key);
   if (!chat) {
     chat = { messages: [], view: [], running: false, cancelled: false, draft: "" };
-    chats.set(itemID, chat);
+    chats.set(key, chat);
   }
   return chat;
+}
+
+export function itemChatConfig(item: ZoteroAPI.Item): ChatConfig {
+  return {
+    key: `item:${item.id}`,
+    writes: false,
+    libraryID: item.libraryID,
+    placeholder: "Ask about this item (Enter to send, Shift+Enter for a new line)",
+    system: async () => {
+      const settings = await actionSettings();
+      return chatSystem(await itemContext(item, settings.contextChars));
+    },
+  };
+}
+
+export function libraryChatConfig(): ChatConfig {
+  return {
+    key: "library",
+    writes: true,
+    libraryID: Zotero.Libraries.userLibraryID,
+    placeholder: "Ask about your library or ask for a change; every change waits for your approval",
+    system: async () => librarySystem(),
+  };
 }
 
 const TOOL_LABEL: Record<string, string> = {
@@ -61,14 +105,44 @@ const TOOL_LABEL: Record<string, string> = {
   zotero_list_notes: "Reading notes",
   zotero_search_items: "Searching the library",
   zotero_get_item: "Looking up an item",
+  zotero_get_attachment: "Looking up an attachment",
   zotero_list_collections: "Looking at collections",
+  zotero_list_libraries: "Looking at libraries",
   zotero_cite: "Formatting a citation",
 };
 
+function toolLabel(name: string): string {
+  return TOOL_LABEL[name] ?? `Preparing a change (${name.replace(/^zotero_/, "").replace(/_/g, " ")})`;
+}
+
 // ---------------------------------------------------------------- rendering
+
+function approvalCard(mount: Mount, chat: Chat, pending: Pending): HTMLElement {
+  const { doc } = mount;
+  const card = el(doc, "div", undefined, "border: 1px solid var(--fill-quinary, #888); border-radius: 6px; padding: 8px; margin: 6px 0;");
+  card.append(
+    el(doc, "div", `Approve this change? (${pending.write.tool.replace(/^zotero_/, "").replace(/_/g, " ")})`, "font-weight: 600;"),
+    el(doc, "div", pending.write.preview.slice(0, 6000), "white-space: pre-wrap; max-height: 40vh; overflow-y: auto; font-size: 0.9em; margin: 4px 0;"),
+  );
+  if (pending.legend.length) {
+    card.append(el(doc, "div", pending.legend.join("\n"), "white-space: pre-wrap; opacity: 0.8; font-size: 0.9em; margin-bottom: 4px;"));
+  }
+  if (/trash/.test(pending.write.tool)) {
+    card.append(el(doc, "div", "Moves to Zotero's trash; restorable from there.", "opacity: 0.8; margin-bottom: 4px;"));
+  }
+  const decide = (approved: boolean) => () => {
+    if (chat.pending !== pending) return;
+    chat.pending = undefined;
+    pending.resolve(approved);
+    refresh(mount.config.key);
+  };
+  card.append(button(doc, "Approve", decide(true)), button(doc, "Reject", decide(false)));
+  return card;
+}
 
 function renderLog(mount: Mount, chat: Chat): void {
   const { doc, log } = mount;
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.replaceChildren();
   for (const entry of chat.view) {
     const box = el(doc, "div", undefined, "margin: 6px 0;");
@@ -78,60 +152,85 @@ function renderLog(mount: Mount, chat: Chat): void {
       box.append(el(doc, "div", "Assistant", "font-weight: 600;"));
       for (const t of entry.tools) box.append(el(doc, "div", `${t}…`, "opacity: 0.6; font-size: 0.9em;"));
       if (entry.text) box.append(el(doc, "div", entry.text, "white-space: pre-wrap; user-select: text;"));
-      else if (chat.running && entry === chat.view.at(-1)) box.append(el(doc, "div", "…", "opacity: 0.6;"));
+      else if (chat.running && entry === chat.view.at(-1) && !chat.pending) box.append(el(doc, "div", "…", "opacity: 0.6;"));
       if (entry.note) {
         box.append(el(doc, "div", entry.note, entry.error ? "color: var(--accent-red, #c00); white-space: pre-wrap;" : "opacity: 0.6; font-size: 0.9em;"));
       }
     }
     log.append(box);
   }
+  if (chat.pending) log.append(approvalCard(mount, chat, chat.pending));
+  if (atBottom) log.scrollTop = log.scrollHeight;
   mount.send.disabled = chat.running;
-  mount.stop.disabled = !chat.running || !chat.cancel;
+  mount.stop.disabled = !chat.running;
   mount.newChat.disabled = chat.running || !chat.view.length;
 }
 
-function refresh(itemID: number): void {
-  const chat = chatFor(itemID);
-  for (const mount of mounts.values()) if (mount.itemID === itemID) renderLog(mount, chat);
+function refresh(key: string): void {
+  const chat = chatFor(key);
+  for (const mount of mounts.values()) if (mount.config.key === key) renderLog(mount, chat);
 }
 
-/** Build the chat area once per mounted item; later updates only redraw the log. */
-export function mountChat(container: HTMLElement, doc: Document, itemID: number, rerenderAll: () => void): void {
-  const chat = chatFor(itemID);
+function stopChat(chat: Chat): void {
+  chat.cancelled = true;
+  chat.cancel?.();
+  const pending = chat.pending;
+  chat.pending = undefined;
+  pending?.resolve(false);
+}
+
+/** Build the chat area once; later updates only redraw the log. */
+export function mountChat(container: HTMLElement, doc: Document, config: ChatConfig, rerenderAll: () => void, logHeight = "60vh"): void {
+  const chat = chatFor(config.key);
   const input = el(doc, "textarea", undefined, "width: 100%; box-sizing: border-box; min-height: 3.5em; resize: vertical;");
-  input.placeholder = "Ask about this item (Enter to send, Shift+Enter for a new line)";
+  input.placeholder = config.placeholder;
   input.value = chat.draft;
-  const sendButton = button(doc, "Send", () => void ask(itemID, input));
-  const stop = button(doc, "Stop", () => chatFor(itemID).cancel?.());
+  const sendButton = button(doc, "Send", () => void ask(config, input));
+  const stop = button(doc, "Stop", () => {
+    stopChat(chatFor(config.key));
+    refresh(config.key);
+  });
   const newChat = button(doc, "New chat", () => {
-    chats.delete(itemID);
-    refresh(itemID);
+    chats.delete(config.key);
+    refresh(config.key);
   });
   input.addEventListener("input", () => {
-    chatFor(itemID).draft = input.value;
+    chatFor(config.key).draft = input.value;
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
-      void ask(itemID, input);
+      void ask(config, input);
     }
   });
-  const log = el(doc, "div", undefined, "max-height: 60vh; overflow-y: auto;");
-  container.replaceChildren(
-    el(doc, "div", "Chat", "font-weight: 600; margin-top: 8px;"),
-    backendPicker(doc, rerenderAll),
-    log,
-    input,
-    el(doc, "div"),
-  );
-  container.lastElementChild?.append(sendButton, stop, newChat);
-  const mount = { itemID, doc, log, input, send: sendButton, stop, newChat };
+  const log = el(doc, "div", undefined, `max-height: ${logHeight}; overflow-y: auto;`);
+  const buttons = el(doc, "div");
+  buttons.append(sendButton, stop, newChat);
+  container.replaceChildren(backendPicker(doc, rerenderAll), log, input, buttons);
+  const mount = { config, doc, log, input, send: sendButton, stop, newChat };
   mounts.set(container, mount);
   renderLog(mount, chat);
 }
 
 export function unmountChat(container: HTMLElement): void {
   mounts.delete(container);
+}
+
+/** Put text in a chat's input (e.g. "About the collection …: "). */
+export function setDraft(key: string, text: string): void {
+  chatFor(key).draft = text;
+  for (const mount of mounts.values()) {
+    if (mount.config.key === key) {
+      mount.input.value = text;
+      mount.input.focus();
+    }
+  }
+}
+
+/** Stop a conversation's request and refuse any pending approval (e.g. its window closed). */
+export function stopChatByKey(key: string): void {
+  const chat = chats.get(key);
+  if (chat) stopChat(chat);
 }
 
 // ------------------------------------------------------------------ sending
@@ -145,11 +244,10 @@ function withoutThinking(messages: MessageParam[]): MessageParam[] {
   );
 }
 
-async function ask(itemID: number, input: HTMLTextAreaElement): Promise<void> {
-  const chat = chatFor(itemID);
+async function ask(config: ChatConfig, input: HTMLTextAreaElement): Promise<void> {
+  const chat = chatFor(config.key);
   const question = input.value.trim();
-  const item = Zotero.Items.get(itemID);
-  if (!question || chat.running || !item) return;
+  if (!question || chat.running) return;
   input.value = "";
   chat.draft = "";
 
@@ -159,14 +257,14 @@ async function ask(itemID: number, input: HTMLTextAreaElement): Promise<void> {
   chat.running = true;
   chat.cancelled = false;
   chat.cancel = undefined;
-  refresh(itemID);
+  refresh(config.key);
 
   let lastPaint = 0;
   const paint = () => {
     const now = Date.now();
     if (now - lastPaint > 80) {
       lastPaint = now;
-      refresh(itemID);
+      refresh(config.key);
     }
   };
   try {
@@ -174,7 +272,7 @@ async function ask(itemID: number, input: HTMLTextAreaElement): Promise<void> {
     const model = resolveModel(settings.backend, stringPref("chatModel", "sonnet"));
     if (chat.backend && chat.backend !== settings.backend.label) chat.messages = withoutThinking(chat.messages);
     chat.backend = settings.backend.label;
-    chat.system ??= chatSystem(await itemContext(item, settings.contextChars));
+    chat.system ??= await config.system();
     const history = trimHistory([...chat.messages, { role: "user", content: question }], HISTORY_CHARS);
     const outcome = await runAgent(history, {
       send: (request, onText) =>
@@ -183,16 +281,31 @@ async function ask(itemID: number, input: HTMLTextAreaElement): Promise<void> {
           onText,
           onCancel: (cancel) => {
             chat.cancel = cancel;
-            refresh(itemID);
+            refresh(config.key);
           },
         }),
       request: { model, max_tokens: settings.maxTokens, system: chat.system },
-      tools: agentTools(READ_TOOLS, { writes: false }, { logError: (e) => Zotero.logError(e) }),
+      tools: agentTools(config.writes ? ALL_TOOLS : READ_TOOLS, { writes: config.writes }, { logError: (e) => Zotero.logError(e) }),
       maxIterations: numberPref("maxToolIterations", 10, 1, 50),
       maxToolResultChars: numberPref("maxToolResultChars", 20_000, 1_000, 100_000),
+      ...(config.writes
+        ? {
+            approve: (write: PendingWrite) =>
+              new Promise<boolean>((resolve) => {
+                const legend = keysIn(`${write.preview}\n${JSON.stringify(write.args)}`)
+                  .map((k) => describeKey(config.libraryID, k))
+                  .filter((d): d is string => Boolean(d));
+                chat.pending = { write, legend, resolve };
+                refresh(config.key);
+              }),
+          }
+        : {}),
       onEvent: (event: AgentEvent) => {
         if (event.type === "text") entry.text += event.delta;
-        if (event.type === "tool") entry.tools.push(TOOL_LABEL[event.name] ?? event.name);
+        if (event.type === "tool") entry.tools.push(toolLabel(event.name));
+        if (event.type === "tool_result" && !TOOL_LABEL[event.name]) {
+          entry.tools.push(event.isError ? `Not changed: ${event.text.split("\n")[0].slice(0, 200)}` : `Done: ${event.text.split("\n")[0].slice(0, 200)}`);
+        }
         paint();
       },
       isCancelled: () => chat.cancelled,
@@ -211,16 +324,14 @@ async function ask(itemID: number, input: HTMLTextAreaElement): Promise<void> {
   } finally {
     chat.running = false;
     chat.cancel = undefined;
-    refresh(itemID);
+    chat.pending = undefined;
+    refresh(config.key);
   }
 }
 
 /** Stop everything (plugin shutdown). */
 export function stopAllChats(): void {
-  for (const chat of chats.values()) {
-    chat.cancelled = true;
-    chat.cancel?.();
-  }
+  for (const chat of chats.values()) stopChat(chat);
   chats.clear();
   mounts.clear();
 }
