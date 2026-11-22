@@ -176,6 +176,11 @@ declare const Zotero: {
   Tags: {
     getAll(libraryID: number): Promise<Array<{ tag: string; type: number }>>;
   };
+  PreferencePanes: {
+    /** src and scripts are relative to the plugin root. Resolves to the pane ID. */
+    register(options: { pluginID: string; src: string; scripts?: string[]; label?: string }): Promise<string>;
+    unregister(id: string): void;
+  };
   initializationPromise: Promise<void>;
   debug(message: string, level?: number): void;
   logError(error: unknown): void;

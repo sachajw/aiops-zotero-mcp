@@ -9,7 +9,14 @@ import { type ToolDefinition, inputJsonSchema } from "../mcp/tool.js";
 export interface TextBlock { type: "text"; text: string }
 export interface ToolUseBlock { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
 export interface ToolResultBlock { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+/**
+ * Thinking blocks are never shown, but must go back to the API unchanged (signature included) when
+ * a conversation continues after tool use, or reasoning models (Claude with thinking) reply empty.
+ */
+export interface ThinkingBlock { type: "thinking"; thinking: string; signature: string }
+export interface RedactedThinkingBlock { type: "redacted_thinking"; data: string }
+export type ReplyBlock = TextBlock | ToolUseBlock | ThinkingBlock | RedactedThinkingBlock;
+export type ContentBlock = ReplyBlock | ToolResultBlock;
 
 export interface MessageParam {
   role: "user" | "assistant";
@@ -28,14 +35,16 @@ export interface MessagesRequest {
   system?: string;
   messages: MessageParam[];
   tools?: ToolParam[];
-  tool_choice?: { type: "auto" } | { type: "any" } | { type: "tool"; name: string };
+  tool_choice?: { type: "auto" } | { type: "any" } | { type: "none" } | { type: "tool"; name: string };
   stream?: boolean;
 }
 
-/** A response block we know how to use; other block types (thinking, server tools) are dropped. */
+/** Response blocks the assistant keeps; others (e.g. server tool results) are dropped. */
 const zBlock = z.union([
   z.object({ type: z.literal("text"), text: z.string() }),
   z.object({ type: z.literal("tool_use"), id: z.string(), name: z.string(), input: z.record(z.string(), z.unknown()) }),
+  z.object({ type: z.literal("thinking"), thinking: z.string(), signature: z.string() }),
+  z.object({ type: z.literal("redacted_thinking"), data: z.string() }),
 ]);
 
 export const zMessage = z.object({
@@ -48,7 +57,7 @@ export const zMessage = z.object({
 
 export interface Message {
   model?: string;
-  content: Array<TextBlock | ToolUseBlock>;
+  content: ReplyBlock[];
   stop_reason: string | null;
 }
 
@@ -57,7 +66,7 @@ export function parseMessage(body: unknown): Message {
   const m = zMessage.parse(body);
   const content = m.content.flatMap((b) => {
     const parsed = zBlock.safeParse(b);
-    return parsed.success ? [parsed.data as TextBlock | ToolUseBlock] : [];
+    return parsed.success ? [parsed.data as ReplyBlock] : [];
   });
   return { model: m.model, content, stop_reason: m.stop_reason ?? null };
 }

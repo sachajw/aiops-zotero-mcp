@@ -5,7 +5,7 @@ An MCP server that runs **inside Zotero** as a plugin, so AI agents (Claude Code
 - **Inside Zotero:** uses Zotero's own JavaScript API, so files, attachments and the trash work the way they do in the app. No debug port, no cloud API, no API key. The one tool that goes online is `zotero_retrieve_metadata`, which uses Zotero's own metadata service exactly as the app's menu does.
 - **Localhost only:** served on Zotero's built-in server at `http://127.0.0.1:23119/aiops-mcp`. The plugin opens no socket of its own.
 - **Token required:** every request needs `Authorization: Bearer <token>`; with no token set, it refuses everything (503).
-- **Assistant in Zotero:** an Assistant section in the item pane (and the PDF reader's side pane) summarises an item into a note and suggests tags and collections, using Claude, Z.ai's GLM or any model behind a local proxy that speaks the Anthropic Messages API. Suggestions apply only when you click; see [Assistant](#assistant).
+- **Assistant in Zotero:** an Assistant section in the item pane (and the PDF reader's side pane) lets you chat about the open item and summarises it into a note or suggests tags and collections, using Claude, Z.ai's GLM or any model behind a local proxy that speaks the Anthropic Messages API. Suggestions apply only when you click; see [Assistant](#assistant).
 - **Safe changes:** every change takes `dry_run: true` to preview it. Nothing is deleted permanently: trashing items or collections is undone by the restore tools, and libraries without a trash are refused.
 
 Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
@@ -69,7 +69,11 @@ Optional: `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (default 45)
 
 ## Assistant
 
-The **Assistant** section (sparkle icon in the item pane, also in the reader's side pane, and **Assistant** in the item's right-click menu) has three actions:
+The **Assistant** section (sparkle icon in the item pane, also in the reader's side pane, and **Assistant** in the item's right-click menu) has a chat and three actions.
+
+**Chat:** ask about the open item. The model starts from the item's metadata and the start of its full text, and can read more of it, your annotations and notes, search the rest of the library and format citations. It can't change anything. Replies stream in; **Stop** cancels, **New chat** starts over, and the backend picker switches between your configured backends mid-conversation. Each item keeps its own conversation while Zotero is open.
+
+**Actions:**
 
 | Action | What it does |
 |---|---|
@@ -79,13 +83,16 @@ The **Assistant** section (sparkle icon in the item pane, also in the reader's s
 
 Nothing changes until you click; the change runs through the same tools as the MCP endpoint (dry run first, then for real).
 
-**Set up:** point the plugin at one or more Claude-Code-style settings files: JSON with an `env` block holding `ANTHROPIC_BASE_URL`, optionally `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. In Zotero → Settings → Advanced → Config Editor:
+**Set up:** point the plugin at one or more Claude-Code-style settings files: JSON with an `env` block holding `ANTHROPIC_BASE_URL`, optionally `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. Zotero → Settings → **Zotero MCP Assistant** has the main settings and a **Test connection** button; all of them are also in the Config Editor:
 
 | Preference (`extensions.aiops-zotero-mcp.llm.`) | Default | Meaning |
 |---|---|---|
 | `profileFiles` | empty | Absolute paths to settings files, one per line or comma-separated |
 | `activeProfile` | first file | Which one to use, by file name without `.settings.json` (e.g. `zai`) |
-| `actionModel` | `haiku` | `default`, `opus`, `sonnet` or `haiku` from the file, or a literal model ID |
+| `chatModel` | `sonnet` | Model for the chat: `default`, `opus`, `sonnet` or `haiku` from the file, or a literal model ID |
+| `actionModel` | `haiku` | Model for the actions (same choices) |
+| `maxToolIterations` | 10 | Tool calls the chat may make before it must answer |
+| `maxToolResultChars` | 20000 | Most characters of one tool result the model sees |
 | `maxTokens` | 4096 | Reply cap, including any thinking the model does first |
 | `contextChars` | 60000 | Characters of full text sent with the item (max 100000) |
 | `requestTimeoutSeconds` | 120 | |
@@ -93,7 +100,7 @@ Nothing changes until you click; the change runs through the same tools as the M
 - **Local proxies only:** `ANTHROPIC_BASE_URL` must be `127.0.0.1`, `localhost` or `[::1]`; anything else is refused.
 - **No stored secret:** the file is read on every request, so a rotated token or changed model takes effect at once; the plugin keeps no copy.
 - **Models:** tested with Claude (`claude-haiku-5-5`) and Z.ai through an Anthropic-format proxy (`glm-4.5-air`, `glm-4.7`, `glm-5.3`). Models that answer in text instead of calling the proposal tool may reply with the same JSON object; anything else is reported as an error.
-- **What leaves Zotero:** the item's metadata and the start of its full text, sent to the proxy you configured; for tag and collection suggestions also your tag names and collection paths.
+- **What leaves Zotero:** the item's metadata and the start of its full text, sent to the proxy you configured; for tag and collection suggestions also your tag names and collection paths; in the chat, whatever its read-only tools return (more of the text, annotations, notes, search results).
 
 ## Security model
 

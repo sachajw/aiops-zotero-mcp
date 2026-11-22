@@ -49,3 +49,41 @@ describe.skipIf(!files.length)("assistant against live proxies", () => {
     });
   }
 });
+
+import { runAgent } from "../../src/assistant/agent.js";
+import { chatSystem } from "../../src/assistant/chat.js";
+import { agentTools } from "../../src/assistant/toolset.js";
+import { readTools } from "../../src/tools/read.js";
+
+describe.skipIf(!files.length)("item chat against live proxies", () => {
+  for (const file of files) {
+    const backend = parseProfile(readFileSync(file, "utf8"), file);
+    const model = resolveModel(backend, process.env.AIOPS_LLM_MODEL ?? "sonnet");
+
+    it(`${backend.label} (${model}) streams and runs a tool round trip with every real read-tool schema`, async () => {
+      // Real schemas, fake runs: no Zotero here, so tools answer with canned text.
+      const tools = agentTools(readTools as never, { writes: false }).map((t) => ({
+        ...t,
+        run: async (input: Record<string, unknown>) => ({ text: `${t.param.name} → ${JSON.stringify(input)}: "Chapter 3: the Sidecar pattern adds a helper container next to the main one."`, isError: false }),
+      }));
+      let streamed = "";
+      const used: string[] = [];
+      const out = await runAgent([{ role: "user", content: "What does chapter 3 cover? Read further into the text to check before answering." }], {
+        send: (req, onText) => send(deps, backend, req, { timeoutSeconds: 120, onText }),
+        request: { model, max_tokens: 4096, system: chatSystem({ ...ctx, fulltext: { text: "Contents: 1 Intro, 2 Pods, 3 ...", totalChars: 90000, attachmentKey: "EFGH2345" } }) },
+        tools,
+        maxIterations: 5,
+        maxToolResultChars: 5000,
+        onEvent: (e) => {
+          if (e.type === "text") streamed += e.delta;
+          if (e.type === "tool") used.push(e.name);
+        },
+        isCancelled: () => false,
+      });
+      expect(used.length).toBeGreaterThan(0);
+      expect(out.text.length).toBeGreaterThan(10);
+      expect(streamed).toContain(out.text.slice(0, 20));
+      expect(out.text.toLowerCase()).toContain("sidecar");
+    }, 240_000);
+  }
+});

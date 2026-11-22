@@ -13,6 +13,11 @@ pref("extensions.aiops-zotero-mcp.llm.profileFiles", "");
 pref("extensions.aiops-zotero-mcp.llm.activeProfile", "");
 // Model for one-click actions: default, opus, sonnet or haiku (from the settings file), or a model ID.
 pref("extensions.aiops-zotero-mcp.llm.actionModel", "haiku");
+// Model for the item chat (same choices).
+pref("extensions.aiops-zotero-mcp.llm.chatModel", "sonnet");
+// Most tool calls the chat may make before it has to answer, and the most characters of one tool result it sees.
+pref("extensions.aiops-zotero-mcp.llm.maxToolIterations", 10);
+pref("extensions.aiops-zotero-mcp.llm.maxToolResultChars", 20000);
 pref("extensions.aiops-zotero-mcp.llm.maxTokens", 4096);
 // Characters of full text sent with an item (max 100000).
 pref("extensions.aiops-zotero-mcp.llm.contextChars", 60000);

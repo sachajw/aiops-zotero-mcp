@@ -4,7 +4,7 @@ import type { Backend } from "../../src/assistant/config.js";
 import { CancelledError, send } from "../../src/assistant/transport.js";
 
 const backend: Backend = { label: "zai", file: "/a/zai.settings.json", baseURL: "http://127.0.0.1:8788", token: "secret", models: { default: "m" } };
-const ok = { role: "assistant", model: "glm", content: [{ type: "thinking", thinking: "…" }, { type: "text", text: "hi" }], stop_reason: "end_turn" };
+const ok = { role: "assistant", model: "glm", content: [{ type: "thinking", thinking: "…", signature: "s" }, { type: "server_tool_use", id: "x" }, { type: "text", text: "hi" }], stop_reason: "end_turn" };
 
 function deps(respond: (url: string, init: Record<string, unknown>) => Promise<{ status: number; body: unknown }>) {
   const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
@@ -24,10 +24,10 @@ function deps(respond: (url: string, init: Record<string, unknown>) => Promise<{
 }
 
 describe("send", () => {
-  it("posts to /v1/messages without streaming, and keeps only usable blocks", async () => {
+  it("posts to /v1/messages without streaming, keeps thinking for the history, and drops unknown blocks", async () => {
     const d = deps(async () => ({ status: 200, body: ok }));
     const m = await send(d.deps, backend, { model: "m", max_tokens: 10, messages: [{ role: "user", content: "x" }], stream: true }, { timeoutSeconds: 5 });
-    expect(m).toEqual({ model: "glm", content: [{ type: "text", text: "hi" }], stop_reason: "end_turn" });
+    expect(m).toEqual({ model: "glm", content: [{ type: "thinking", thinking: "…", signature: "s" }, { type: "text", text: "hi" }], stop_reason: "end_turn" });
     expect(d.calls[0].url).toBe("http://127.0.0.1:8788/v1/messages");
     expect(JSON.parse(d.calls[0].init.body as string).stream).toBe(false);
     expect(d.calls[0].init.headers).toMatchObject({ authorization: "Bearer secret" });

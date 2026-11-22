@@ -12,6 +12,10 @@ export default tseslint.config(
     rules: { "no-unused-vars": "off", "@typescript-eslint/no-unused-vars": "off" },
   },
   {
+    files: ["addon/static/**/*.js"],
+    languageOptions: { sourceType: "script", globals: { Zotero: "readonly", document: "readonly", window: "readonly" } },
+  },
+  {
     files: ["scripts/**/*.mjs"],
     languageOptions: { globals: { console: "readonly", URL: "readonly" } },
   },

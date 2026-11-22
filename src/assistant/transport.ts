@@ -5,11 +5,18 @@
 import { ToolError } from "../mcp/tool.js";
 import { type Message, type MessagesRequest, errorMessage, parseMessage } from "./anthropic.js";
 import type { Backend } from "./config.js";
+import { StreamAccumulator } from "./sse.js";
 
 export const ANTHROPIC_VERSION = "2023-06-01";
 
+export interface FetchResponse {
+  status: number;
+  text(): Promise<string>;
+  body?: { getReader(): { read(): Promise<{ done: boolean; value?: Uint8Array }> } } | null;
+}
+
 export interface TransportDeps {
-  fetch: (url: string, init: Record<string, unknown>) => Promise<{ status: number; json(): Promise<unknown>; text(): Promise<string> }>;
+  fetch: (url: string, init: Record<string, unknown>) => Promise<FetchResponse>;
   AbortController: new () => { signal: unknown; abort(reason?: unknown): void };
   setTimeout: (fn: () => void, ms: number) => unknown;
   clearTimeout: (handle: unknown) => void;
@@ -19,6 +26,8 @@ export interface SendOptions {
   timeoutSeconds: number;
   /** Called with a function that cancels this request (for a Stop button). */
   onCancel?: (cancel: () => void) => void;
+  /** Stream the reply, passing text to this as it arrives. Without it the request doesn't stream. */
+  onText?: (delta: string) => void;
 }
 
 /** Headers for a request; the token goes only in Authorization and is never logged. */
@@ -48,36 +57,52 @@ export async function send(deps: TransportDeps, backend: Backend, request: Messa
     reason = "cancel";
     controller.abort();
   });
+  const stream = Boolean(options.onText);
 
-  let response: Awaited<ReturnType<TransportDeps["fetch"]>>;
-  let body: unknown;
   try {
-    response = await deps.fetch(`${backend.baseURL}/v1/messages`, {
+    const response = await deps.fetch(`${backend.baseURL}/v1/messages`, {
       method: "POST",
       headers: requestHeaders(backend),
-      body: JSON.stringify({ ...request, stream: false }),
+      body: JSON.stringify({ ...request, stream }),
       signal: controller.signal,
     });
-    const text = await response.text();
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = text;
+    if (response.status !== 200 || !stream || !response.body) {
+      return readWhole(backend, response.status, await response.text());
     }
+    const accumulator = new StreamAccumulator(options.onText);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      accumulator.push(decoder.decode(value, { stream: true }));
+    }
+    accumulator.push(decoder.decode());
+    return accumulator.message();
   } catch (error) {
     if (reason === "cancel") throw new CancelledError();
     if (reason === "timeout") throw new ToolError(`${backend.label} didn't answer within ${options.timeoutSeconds}s`);
+    if (error instanceof ToolError) throw error;
     throw new ToolError(`Can't reach ${backend.label} at ${backend.baseURL}: ${error instanceof Error ? error.message : String(error)}. Is the proxy running?`);
   } finally {
     deps.clearTimeout(timer);
   }
+}
 
-  if (response.status !== 200) {
+/** A non-streamed reply, or an error reply of either kind. */
+function readWhole(backend: Backend, status: number, text: string): Message {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+  if (status !== 200) {
     const detail = errorMessage(body) ?? (typeof body === "string" ? body.slice(0, 200) : "");
-    const hint = response.status === 401 || response.status === 403
+    const hint = status === 401 || status === 403
       ? ` Check ANTHROPIC_AUTH_TOKEN in ${backend.file}; this proxy may need credentials the file doesn't have.`
       : "";
-    throw new ToolError(`${backend.label} returned HTTP ${response.status}${detail ? `: ${detail}` : ""}.${hint}`);
+    throw new ToolError(`${backend.label} returned HTTP ${status}${detail ? `: ${detail}` : ""}.${hint}`);
   }
   try {
     return parseMessage(body);

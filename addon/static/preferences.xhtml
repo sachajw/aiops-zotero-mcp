@@ -1,0 +1,25 @@
+<vbox id="aiops-llm-prefs">
+  <groupbox>
+    <label><html:h2>Assistant</html:h2></label>
+    <html:p style="margin-top: 0;">The Assistant (item pane) talks to a model through a proxy on this computer that speaks the Anthropic Messages API. Point it at Claude-Code-style settings files (JSON with env.ANTHROPIC_BASE_URL, optional ANTHROPIC_AUTH_TOKEN, and ANTHROPIC_MODEL / ANTHROPIC_DEFAULT_*_MODEL). Each file is read on every request; nothing is copied into Zotero.</html:p>
+    <label value="Settings files (absolute paths, one per line)"/>
+    <html:textarea id="aiops-llm-profile-files" rows="3" style="width: 100%;" preference="extensions.aiops-zotero-mcp.llm.profileFiles"/>
+    <hbox align="center">
+      <label value="Backend in use (file name without .settings.json; empty = first)"/>
+      <html:input type="text" id="aiops-llm-active" preference="extensions.aiops-zotero-mcp.llm.activeProfile"/>
+    </hbox>
+    <hbox align="center">
+      <label value="Chat model (default, opus, sonnet, haiku, or a model ID)"/>
+      <html:input type="text" id="aiops-llm-chat-model" preference="extensions.aiops-zotero-mcp.llm.chatModel"/>
+    </hbox>
+    <hbox align="center">
+      <label value="Actions model"/>
+      <html:input type="text" id="aiops-llm-action-model" preference="extensions.aiops-zotero-mcp.llm.actionModel"/>
+    </hbox>
+    <hbox align="center">
+      <html:button id="aiops-llm-test">Test connection</html:button>
+      <label id="aiops-llm-test-result" value=""/>
+    </hbox>
+    <html:p style="opacity: 0.7;">More settings (token limits, timeouts) are in the Config Editor under extensions.aiops-zotero-mcp.llm.</html:p>
+  </groupbox>
+</vbox>

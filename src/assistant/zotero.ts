@@ -99,3 +99,13 @@ export function collectionChoices(libraryID: number): CollectionChoice[] {
 export function collectionKeysOf(item: ZoteroAPI.Item): string[] {
   return item.getCollections().map((id) => Zotero.Collections.get(id)).flatMap((c) => (c ? [c.key] : []));
 }
+
+/** One tiny request to the configured backend: for the Settings pane's Test connection button. */
+export async function testConnection(): Promise<string> {
+  const { send } = await import("./transport.js");
+  const settings = await actionSettings();
+  const model = resolveModel(settings.backend, stringPref("chatModel", "sonnet"));
+  const started = Date.now();
+  const reply = await send(transportDeps(), settings.backend, { model, max_tokens: 1024, messages: [{ role: "user", content: "Reply with just: OK" }] }, { timeoutSeconds: settings.timeoutSeconds });
+  return `OK: ${reply.model ?? model} via ${settings.backend.label} answered in ${((Date.now() - started) / 1000).toFixed(1)}s.`;
+}

@@ -17,7 +17,6 @@ import {
   summaryRequest,
   tagsRequest,
 } from "../assistant/actions.js";
-import { ACTIVE_PROFILE_PREF, PROFILE_FILES_PREF, profileFiles, profileLabel } from "../assistant/config.js";
 import { CancelledError, send } from "../assistant/transport.js";
 import {
   actionSettings,
@@ -25,11 +24,14 @@ import {
   collectionKeysOf,
   itemContext,
   libraryTags,
+  testConnection,
   transportDeps,
 } from "../assistant/zotero.js";
 import { runTool } from "../mcp/runner.js";
 import type { ToolDefinition } from "../mcp/tool.js";
 import { writeTools } from "../tools/write.js";
+import { mountChat, stopAllChats, unmountChat } from "./chat.js";
+import { backendSummary, button, checkbox, el } from "./dom.js";
 
 type ActionKind = "summary" | "tags" | "collections";
 
@@ -42,7 +44,6 @@ type PaneState =
   | { status: "applying"; message: string }
   | { status: "done"; message: string };
 
-const HTML_NS = "http://www.w3.org/1999/xhtml";
 const FTL = "aiops-zotero-mcp.ftl";
 const WRITE_TOOLS: ReadonlyMap<string, ToolDefinition> = new Map(writeTools.map((t) => [t.name, t as unknown as ToolDefinition]));
 
@@ -50,6 +51,7 @@ const states = new Map<number, PaneState>();
 const mounts = new Map<HTMLElement, { itemID: number; doc: Document }>();
 let sectionKey: string | false = false;
 let menuID: string | false = false;
+let prefPaneID: string | undefined;
 
 // ------------------------------------------------------------------ actions
 
@@ -129,41 +131,23 @@ async function apply(itemID: number, tool: string, args: Record<string, unknown>
 
 // ---------------------------------------------------------------- rendering
 
-function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, text?: string, style?: string): HTMLElementTagNameMap[K] {
-  const node = doc.createElementNS(HTML_NS, tag) as HTMLElementTagNameMap[K];
-  if (text !== undefined) node.textContent = text;
-  if (style) node.setAttribute("style", style);
-  return node;
-}
-
-function button(doc: Document, label: string, onClick: () => void, disabled = false): HTMLButtonElement {
-  const b = el(doc, "button", label, "margin: 0 6px 6px 0;");
-  b.disabled = disabled;
-  b.addEventListener("click", onClick);
-  return b;
-}
-
-function checkbox(doc: Document, label: string, checked: boolean, note?: string): { row: HTMLElement; input: HTMLInputElement } {
-  const row = el(doc, "label", undefined, "display: block; margin: 2px 0;");
-  const input = el(doc, "input");
-  input.type = "checkbox";
-  input.checked = checked;
-  row.append(input, doc.createTextNode(` ${label}`));
-  if (note) row.append(el(doc, "span", ` ${note}`, "opacity: 0.7;"));
-  return { row, input };
-}
-
-function backendSummary(): string {
-  const files = profileFiles(Zotero.Prefs.get(PROFILE_FILES_PREF, true));
-  if (!files.length) return "not set up";
-  const active = String(Zotero.Prefs.get(ACTIVE_PROFILE_PREF, true) ?? "").trim();
-  return active || profileLabel(files[0]);
-}
-
 function render(body: HTMLElement, doc: Document, itemID: number): void {
   const item = Zotero.Items.get(itemID);
-  body.replaceChildren();
-  if (!item || !eligible(item)) return;
+  if (!item || !eligible(item)) {
+    body.replaceChildren();
+    delete body.dataset.aiopsItem;
+    return;
+  }
+  // The chat area is built once per item (so typing and streaming aren't disturbed); the
+  // actions area is redrawn on every change.
+  if (body.dataset.aiopsItem !== String(itemID)) {
+    const chatArea = el(doc, "div");
+    body.replaceChildren(el(doc, "div"), chatArea);
+    body.dataset.aiopsItem = String(itemID);
+    mountChat(chatArea, doc, itemID, rerenderAll);
+  }
+  const area = body.firstElementChild as HTMLElement;
+  area.replaceChildren();
   const state = states.get(itemID);
   const busy = state?.status === "running" || state?.status === "applying";
 
@@ -173,14 +157,14 @@ function render(body: HTMLElement, doc: Document, itemID: number): void {
     button(doc, "Suggest tags", () => void runAction(item, "tags"), busy),
     button(doc, "Suggest collection", () => void runAction(item, "collections"), busy || !item.isTopLevelItem()),
   );
-  body.append(actions);
+  area.append(actions);
   if (!state) {
-    body.append(el(doc, "div", `Model backend: ${backendSummary()}. Nothing changes until you click Apply.`, "opacity: 0.7;"));
+    area.append(el(doc, "div", "Actions change nothing until you click Apply.", "opacity: 0.7;"));
     return;
   }
 
   const panel = el(doc, "div", undefined, "margin-top: 4px;");
-  body.append(panel);
+  area.append(panel);
   const by = (s: { model: string; backend: string }) => el(doc, "div", `From ${s.model} via ${s.backend}.`, "opacity: 0.7; margin-bottom: 4px;");
   const discard = () => button(doc, "Discard", () => { states.delete(itemID); render(body, doc, itemID); });
 
@@ -248,6 +232,10 @@ function render(body: HTMLElement, doc: Document, itemID: number): void {
   }
 }
 
+function rerenderAll(): void {
+  for (const [body, mount] of mounts) render(body, mount.doc, mount.itemID);
+}
+
 // ------------------------------------------------------------- registration
 
 function revealSection(): void {
@@ -294,6 +282,7 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
       if (!item) {
         mounts.delete(body);
         body.replaceChildren();
+        delete body.dataset.aiopsItem;
         return;
       }
       mounts.set(body, { itemID: item.id, doc });
@@ -302,6 +291,8 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
     },
     onDestroy: ({ body }) => {
       mounts.delete(body);
+      const chatArea = body.lastElementChild;
+      if (chatArea) unmountChat(chatArea as HTMLElement);
     },
   });
   menuID = Zotero.MenuManager.registerMenu({
@@ -322,15 +313,29 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
   });
   const win = Zotero.getMainWindow();
   if (win) addStrings(win);
+  // The Settings pane's Test connection button calls this (its script runs in the Settings window).
+  (Zotero as unknown as Record<string, unknown>).AiopsZoteroMcp = { testConnection };
+  Zotero.PreferencePanes.register({
+    pluginID,
+    src: "content/preferences.xhtml",
+    scripts: ["content/preferences.js"],
+    label: "Zotero MCP Assistant",
+  }).then((id) => {
+    prefPaneID = id;
+  }, (e: unknown) => Zotero.logError(e));
 }
 
 export function unregisterAssistant(): void {
+  stopAllChats();
   for (const state of states.values()) if (state.status === "running") state.cancel?.();
   states.clear();
   mounts.clear();
   if (sectionKey) Zotero.ItemPaneManager.unregisterSection(sectionKey);
   if (menuID) Zotero.MenuManager.unregisterMenu(menuID);
   sectionKey = menuID = false;
+  if (prefPaneID) Zotero.PreferencePanes.unregister(prefPaneID);
+  prefPaneID = undefined;
+  Reflect.deleteProperty(Zotero, "AiopsZoteroMcp");
   const win = Zotero.getMainWindow();
   if (win) removeStrings(win);
 }
