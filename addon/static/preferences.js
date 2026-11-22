@@ -117,8 +117,19 @@
       $("aiops-llm-add-name").value = p ? select.value : "";
       $("aiops-llm-add-url").value = p ? p.baseURL : "https://";
       $("aiops-llm-add-auth").value = p ? p.auth : "x-api-key";
-      for (const tier of ["default", "opus", "sonnet", "haiku"]) $(`aiops-llm-add-m-${tier}`).value = p ? p.models[tier] || "" : "";
+      $("aiops-llm-add-format").value = p ? p.format || "anthropic" : "anthropic";
+      $("aiops-llm-add-tokens").value = p ? p.tokenParam || "max_tokens" : "max_tokens";
+      showTokens();
+      for (const tier of ["default", "opus", "sonnet", "haiku"]) {
+        const field = $(`aiops-llm-add-m-${tier}`);
+        field.value = p ? p.models[tier] || "" : "";
+        field.placeholder = tier === "default" ? "model ID (required)" : "optional";
+      }
     };
+    const showTokens = () => {
+      $("aiops-llm-add-tokens-box").hidden = $("aiops-llm-add-format").value !== "openai";
+    };
+    $("aiops-llm-add-format").addEventListener("change", showTokens);
     select.addEventListener("change", fill);
     fill();
     $("aiops-llm-add-save").addEventListener("click", async (event) => {
@@ -133,6 +144,8 @@
           name: $("aiops-llm-add-name").value.trim(),
           baseURL: $("aiops-llm-add-url").value.trim(),
           auth: $("aiops-llm-add-auth").value,
+          format: $("aiops-llm-add-format").value,
+          tokenParam: $("aiops-llm-add-format").value === "openai" ? $("aiops-llm-add-tokens").value : "",
           models,
           key: $("aiops-llm-add-key").value,
         });

@@ -5,6 +5,7 @@
 import { ToolError } from "../mcp/tool.js";
 import { type Message, type MessagesRequest, errorMessage, parseMessage } from "./anthropic.js";
 import type { Backend } from "./config.js";
+import { OpenAIStreamAccumulator, fromOpenAIResponse, toOpenAIRequest } from "./openai.js";
 import { StreamAccumulator } from "./sse.js";
 
 export const ANTHROPIC_VERSION = "2023-06-01";
@@ -32,6 +33,11 @@ export interface SendOptions {
 
 /** Headers for a request, as Claude Code sends them: ANTHROPIC_API_KEY as x-api-key, ANTHROPIC_AUTH_TOKEN as Bearer. Keys are never logged. */
 export function requestHeaders(backend: Backend): Record<string, string> {
+  if (backend.format === "openai") {
+    // OpenAI-format servers take any key as Authorization: Bearer.
+    const key = backend.authToken ?? backend.apiKey;
+    return { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) };
+  }
   return {
     "content-type": "application/json",
     "anthropic-version": ANTHROPIC_VERSION,
@@ -61,16 +67,17 @@ export async function send(deps: TransportDeps, backend: Backend, request: Messa
   const stream = Boolean(options.onText);
 
   try {
-    const response = await deps.fetch(`${backend.baseURL}/v1/messages`, {
+    const openai = backend.format === "openai";
+    const response = await deps.fetch(openai ? `${backend.baseURL}/chat/completions` : `${backend.baseURL}/v1/messages`, {
       method: "POST",
       headers: requestHeaders(backend),
-      body: JSON.stringify({ ...request, stream }),
+      body: JSON.stringify(openai ? toOpenAIRequest(request, backend.tokenParam ?? "max_tokens", stream) : { ...request, stream }),
       signal: controller.signal,
     });
     if (response.status !== 200 || !stream || !response.body) {
       return readWhole(backend, response.status, await response.text());
     }
-    const accumulator = new StreamAccumulator(options.onText);
+    const accumulator = openai ? new OpenAIStreamAccumulator(options.onText) : new StreamAccumulator(options.onText);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     for (;;) {
@@ -106,8 +113,8 @@ function readWhole(backend: Backend, status: number, text: string): Message {
     throw new ToolError(`${backend.label} returned HTTP ${status}${detail ? `: ${detail}` : ""}.${hint}`);
   }
   try {
-    return parseMessage(body);
+    return backend.format === "openai" ? fromOpenAIResponse(body) : parseMessage(body);
   } catch {
-    throw new ToolError(`${backend.label} sent a response that isn't a Messages API reply`);
+    throw new ToolError(`${backend.label} sent a response that isn't a ${backend.format === "openai" ? "chat-completions" : "Messages API"} reply`);
   }
 }

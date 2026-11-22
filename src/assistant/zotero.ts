@@ -95,10 +95,13 @@ export function listBackends(): BackendInfo[] {
 }
 
 /** Save a provider from the Settings form: its settings to prefs, its key to the password store. */
-export async function saveBackend(input: { name: unknown; baseURL: unknown; auth: unknown; models: unknown; key: unknown }): Promise<string> {
+export async function saveBackend(input: { name: unknown; baseURL: unknown; auth: unknown; models: unknown; key: unknown; format?: unknown; tokenParam?: unknown }): Promise<string> {
   const stored = parseStoredBackends(pref(BACKENDS_PREF));
   const taken = backendLabels(pref(PROFILE_FILES_PREF), "[]");
-  const def = validateStoredBackend({ name: input.name, baseURL: input.baseURL, auth: input.auth, models: input.models }, [...taken, ...stored.map((b) => b.name)]);
+  const def = validateStoredBackend(
+    { name: input.name, baseURL: input.baseURL, auth: input.auth, models: input.models, format: input.format || undefined, tokenParam: input.tokenParam || undefined },
+    [...taken, ...stored.map((b) => b.name)],
+  );
   const key = typeof input.key === "string" ? input.key.trim() : "";
   if (key) await keyStore.write(def.name, key);
   else if (!isLoopback(def.baseURL)) throw new Error("Enter the API key (only a gateway on this computer can do without one)");

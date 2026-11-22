@@ -8,10 +8,28 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseCollectionProposal, parseSummary, parseTagProposal, collectionsRequest, summaryRequest, tagsRequest, type ItemContext } from "../../src/assistant/actions.js";
-import { parseProfile, profileFiles, resolveModel } from "../../src/assistant/config.js";
+import { type Backend, parseProfile, profileFiles, resolveModel } from "../../src/assistant/config.js";
 import { send } from "../../src/assistant/transport.js";
 
 const files = profileFiles(process.env.AIOPS_LLM_PROFILE_FILES);
+/**
+ * Backends under test: every settings file, plus an OpenAI-format server if AIOPS_LLM_OPENAI_URL and
+ * AIOPS_LLM_OPENAI_MODEL are set (key in AIOPS_LLM_OPENAI_KEY, optional for a local server).
+ */
+const backends: Backend[] = [
+  ...files.map((f) => parseProfile(readFileSync(f, "utf8"), f)),
+  ...(process.env.AIOPS_LLM_OPENAI_URL && process.env.AIOPS_LLM_OPENAI_MODEL
+    ? [{
+        label: "openai-format",
+        file: "env",
+        baseURL: process.env.AIOPS_LLM_OPENAI_URL.replace(/\/+$/, ""),
+        ...(process.env.AIOPS_LLM_OPENAI_KEY ? { authToken: process.env.AIOPS_LLM_OPENAI_KEY } : {}),
+        models: { default: process.env.AIOPS_LLM_OPENAI_MODEL },
+        format: "openai" as const,
+        tokenParam: (process.env.AIOPS_LLM_OPENAI_TOKEN_PARAM as "max_tokens" | "max_completion_tokens" | undefined) ?? "max_tokens",
+      }]
+    : []),
+];
 const deps = {
   fetch: (url: string, init: Record<string, unknown>) => fetch(url, init as RequestInit),
   AbortController,
@@ -23,9 +41,8 @@ const ctx: ItemContext = {
   abstract: "Reusable elements for designing cloud-native applications on Kubernetes.", tags: [], collectionPaths: [],
 };
 
-describe.skipIf(!files.length)("assistant against live proxies", () => {
-  for (const file of files) {
-    const backend = parseProfile(readFileSync(file, "utf8"), file);
+describe.skipIf(!backends.length)("assistant against live proxies", () => {
+  for (const backend of backends) {
     const model = resolveModel(backend, process.env.AIOPS_LLM_MODEL ?? "haiku");
     const opts = { timeoutSeconds: 90 };
 
@@ -55,16 +72,23 @@ import { chatSystem } from "../../src/assistant/chat.js";
 import { agentTools } from "../../src/assistant/toolset.js";
 import { readTools } from "../../src/tools/read.js";
 
-describe.skipIf(!files.length)("item chat against live proxies", () => {
-  for (const file of files) {
-    const backend = parseProfile(readFileSync(file, "utf8"), file);
+describe.skipIf(!backends.length)("item chat against live proxies", () => {
+  for (const backend of backends) {
     const model = resolveModel(backend, process.env.AIOPS_LLM_MODEL ?? "sonnet");
 
     it(`${backend.label} (${model}) streams and runs a tool round trip with every real read-tool schema`, async () => {
       // Real schemas, fake runs: no Zotero here, so tools answer with canned text.
       const tools = agentTools(readTools as never, { writes: false }).map((t) => ({
         ...t,
-        run: async (input: Record<string, unknown>) => ({ text: `${t.param.name} → ${JSON.stringify(input)}: "Chapter 3: the Sidecar pattern adds a helper container next to the main one."`, isError: false }),
+        // Each tool answers like the real one would, so the model isn't misled by odd results.
+        run: async () => ({
+          text: t.param.name === "zotero_get_fulltext"
+            ? `Text of EFGH2345: characters 32–110 of 90000.\n\n{"text": "Chapter 3: the Sidecar pattern adds a helper container next to the main one."}`
+            : t.param.name === "zotero_search_items"
+              ? `1 matching item\n\n{"items": [{"key": "ABCD2345", "itemType": "book", "title": "Kubernetes Patterns"}]}`
+              : `${t.param.name}: nothing relevant here; the item's text is read with zotero_get_fulltext.`,
+          isError: false,
+        }),
       }));
       let streamed = "";
       const used: string[] = [];
@@ -91,9 +115,8 @@ describe.skipIf(!files.length)("item chat against live proxies", () => {
 import { librarySystem } from "../../src/assistant/chat.js";
 import { writeTools } from "../../src/tools/write.js";
 
-describe.skipIf(!files.length)("library assistant against live proxies", () => {
-  for (const file of files) {
-    const backend = parseProfile(readFileSync(file, "utf8"), file);
+describe.skipIf(!backends.length)("library assistant against live proxies", () => {
+  for (const backend of backends) {
     const model = resolveModel(backend, process.env.AIOPS_LLM_MODEL ?? "sonnet");
 
     it(`${backend.label} (${model}) asks for approval before tagging, with the right arguments`, async () => {

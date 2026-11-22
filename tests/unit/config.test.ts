@@ -125,3 +125,15 @@ describe("gateways on this computer", () => {
     expect(PROVIDERS.gateway.baseURL).toMatch(/^http:\/\/127\.0\.0\.1/);
   });
 });
+
+describe("OpenAI-format providers", () => {
+  it("load with their format and token field, and send the key as Bearer", async () => {
+    const def = { name: "ollama", baseURL: "http://127.0.0.1:11434/v1", auth: "bearer", format: "openai", tokenParam: "max_tokens", models: { default: "llama3.2" } };
+    const read = { pref: (n: string) => (n === BACKENDS_PREF ? JSON.stringify([def]) : undefined), readFile: async () => "", readKey: async () => undefined };
+    const b = await loadBackend(read);
+    expect(b).toMatchObject({ format: "openai", tokenParam: "max_tokens" });
+    expect(requestHeaders(b)).toEqual({ "content-type": "application/json" });
+    expect(requestHeaders({ ...b, apiKey: "sk" })).toEqual({ "content-type": "application/json", authorization: "Bearer sk" });
+    expect(PROVIDERS.openai).toMatchObject({ format: "openai", tokenParam: "max_completion_tokens", baseURL: "https://api.openai.com/v1" });
+  });
+});

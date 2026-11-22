@@ -1,7 +1,7 @@
 <vbox id="aiops-llm-prefs">
   <groupbox>
     <label><html:h2>Assistant</html:h2></label>
-    <html:p style="margin-top: 0;">The Assistant (item pane, and Tools → Library assistant) talks to a model that speaks the Anthropic Messages API: a provider with your API key, a gateway or proxy on this computer, or Claude-Code-style settings files. Set up as many as you like and switch between them. Keys only travel over https, or plain http to this computer.</html:p>
+    <html:p style="margin-top: 0;">The Assistant (item pane, and Tools → Library assistant) talks to a model that speaks the Anthropic Messages API or the OpenAI chat-completions API: a provider with your API key (Anthropic, OpenAI, Z.ai, OpenRouter…), a model server on this computer (Ollama, LM Studio), a gateway or proxy, or Claude-Code-style settings files. Set up as many as you like and switch between them. Keys only travel over https, or plain http to this computer.</html:p>
 
     <label><html:h3 style="margin-bottom: 4px;">Backends</html:h3></label>
     <html:div id="aiops-llm-backends"/>
@@ -12,6 +12,8 @@
       <html:div style="margin: 2px 0;">Provider <html:select id="aiops-llm-add-provider"/></html:div>
       <html:div style="margin: 2px 0;">Name <html:input type="text" id="aiops-llm-add-name" style="width: 10em;" placeholder="e.g. anthropic"/></html:div>
       <html:div style="margin: 2px 0;">Base URL <html:input type="text" id="aiops-llm-add-url" style="width: 22em;"/></html:div>
+      <html:div style="margin: 2px 0;">API format <html:select id="aiops-llm-add-format"><html:option value="anthropic">Anthropic Messages (/v1/messages)</html:option><html:option value="openai">OpenAI chat completions (/chat/completions)</html:option></html:select>
+        <html:span id="aiops-llm-add-tokens-box"> reply cap field <html:select id="aiops-llm-add-tokens"><html:option value="max_completion_tokens">max_completion_tokens (OpenAI)</html:option><html:option value="max_tokens">max_tokens (most others)</html:option></html:select></html:span></html:div>
       <html:div style="margin: 2px 0;">Key sent as <html:select id="aiops-llm-add-auth"><html:option value="x-api-key">x-api-key (Anthropic API keys)</html:option><html:option value="bearer">Authorization: Bearer</html:option></html:select></html:div>
       <html:div style="margin: 2px 0;">API key <html:input type="password" id="aiops-llm-add-key" style="width: 22em;" autocomplete="off"/> <html:span style="opacity: 0.7;">(optional for a gateway on this computer)</html:span></html:div>
       <html:div style="margin: 2px 0;">Models: default <html:input type="text" id="aiops-llm-add-m-default" style="width: 11em;"/> opus <html:input type="text" id="aiops-llm-add-m-opus" style="width: 11em;"/></html:div>

@@ -21,8 +21,11 @@ export const BACKENDS_PREF = `${PREF_PREFIX}backends`;
 export const SETTINGS_SOURCE = "Zotero Settings → Zotero MCP Assistant";
 
 export type ModelChoice = "default" | "opus" | "sonnet" | "haiku";
-/** How the key is sent: x-api-key (Anthropic API keys) or Authorization: Bearer (tokens, many proxies). */
+/** How the key is sent: x-api-key (Anthropic API keys) or Authorization: Bearer (tokens, OpenAI-format servers). */
 export type AuthKind = "x-api-key" | "bearer";
+/** The API a backend speaks: Anthropic Messages (/v1/messages) or OpenAI chat completions (/chat/completions). */
+export type ApiFormat = "anthropic" | "openai";
+export type TokenParam = "max_completion_tokens" | "max_tokens";
 
 export interface Backend {
   /** The settings file's name without .settings.json (e.g. "zai"), or the name given in Settings. */
@@ -35,6 +38,10 @@ export interface Backend {
   /** Sent as Authorization: Bearer (ANTHROPIC_AUTH_TOKEN). */
   authToken?: string;
   models: Partial<Record<ModelChoice, string>>;
+  /** Absent means "anthropic" (settings files are always Anthropic format). */
+  format?: ApiFormat;
+  /** OpenAI format only: the field for the reply cap. */
+  tokenParam?: TokenParam;
 }
 
 /** "/path/to/zai.settings.json" → "zai". */
@@ -151,6 +158,8 @@ export interface StoredBackend {
   baseURL: string;
   auth: AuthKind;
   models: Partial<Record<ModelChoice, string>> & { default: string };
+  format?: ApiFormat;
+  tokenParam?: TokenParam;
 }
 
 const zModel = z.string().trim().min(1).max(200);
@@ -161,6 +170,8 @@ const zStoredBackend = z.object({
   baseURL: z.string().trim().url(),
   auth: z.enum(["x-api-key", "bearer"]),
   models: z.object({ default: zModel, opus: zOptionalModel, sonnet: zOptionalModel, haiku: zOptionalModel }),
+  format: z.enum(["anthropic", "openai"]).optional(),
+  tokenParam: z.enum(["max_completion_tokens", "max_tokens"]).optional(),
 });
 
 /** Starting points for the Settings form; every field stays editable. */
@@ -170,6 +181,38 @@ export const PROVIDERS: Record<string, Omit<StoredBackend, "name" | "models"> & 
     baseURL: "https://api.anthropic.com",
     auth: "x-api-key",
     models: { default: "claude-sonnet-5-5", opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" },
+  },
+  openai: {
+    title: "OpenAI (API key; OpenAI format)",
+    baseURL: "https://api.openai.com/v1",
+    auth: "bearer",
+    format: "openai",
+    tokenParam: "max_completion_tokens",
+    models: { default: "" },
+  },
+  openrouter: {
+    title: "OpenRouter (API key; OpenAI format)",
+    baseURL: "https://openrouter.ai/api/v1",
+    auth: "bearer",
+    format: "openai",
+    tokenParam: "max_tokens",
+    models: { default: "" },
+  },
+  ollama: {
+    title: "Ollama on this computer (no key; OpenAI format)",
+    baseURL: "http://127.0.0.1:11434/v1",
+    auth: "bearer",
+    format: "openai",
+    tokenParam: "max_tokens",
+    models: { default: "" },
+  },
+  lmstudio: {
+    title: "LM Studio on this computer (no key; OpenAI format)",
+    baseURL: "http://127.0.0.1:1234/v1",
+    auth: "bearer",
+    format: "openai",
+    tokenParam: "max_tokens",
+    models: { default: "" },
   },
   gateway: {
     title: "Local gateway or proxy on this computer (key optional)",
@@ -221,6 +264,7 @@ export function backendFromStored(def: StoredBackend, key: string | undefined): 
     baseURL: def.baseURL.replace(/\/+$/, ""),
     ...(key ? (def.auth === "x-api-key" ? { apiKey: key } : { authToken: key }) : {}),
     models: def.models,
+    ...(def.format === "openai" ? { format: "openai" as const, tokenParam: def.tokenParam ?? "max_tokens" } : {}),
   };
 }
 
