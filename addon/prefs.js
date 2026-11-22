@@ -12,7 +12,7 @@ pref("extensions.aiops-zotero-mcp.llm.profileFiles", "");
 // Which of those files to use, by name without .settings.json (e.g. "zai"); empty = the first.
 pref("extensions.aiops-zotero-mcp.llm.activeProfile", "");
 // Model for one-click actions: default, opus, sonnet or haiku (from the settings file), or a model ID.
-pref("extensions.aiops-zotero-mcp.llm.actionModel", "haiku");
+pref("extensions.aiops-zotero-mcp.llm.actionModel", "sonnet");
 // Model for the chats (same choices).
 pref("extensions.aiops-zotero-mcp.llm.chatModel", "sonnet");
 // Per backend, add extensions.aiops-zotero-mcp.llm.chatModel.<name> / .actionModel.<name>

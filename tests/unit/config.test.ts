@@ -82,7 +82,7 @@ describe("modelChoice", () => {
   });
 });
 
-import { BACKENDS_PREF, PROVIDERS, backendLabels, parseStoredBackends, validateStoredBackend } from "../../src/assistant/config.js";
+import { BACKENDS_PREF, PROVIDERS, backendFromStored, backendLabels, parseStoredBackends, validateStoredBackend } from "../../src/assistant/config.js";
 
 describe("providers added in Settings", () => {
   const anthropic = { name: "anthropic", ...PROVIDERS.anthropic };
@@ -135,5 +135,9 @@ describe("OpenAI-format providers", () => {
     expect(requestHeaders(b)).toEqual({ "content-type": "application/json" });
     expect(requestHeaders({ ...b, apiKey: "sk" })).toEqual({ "content-type": "application/json", authorization: "Bearer sk" });
     expect(PROVIDERS.openai).toMatchObject({ format: "openai", tokenParam: "max_completion_tokens", baseURL: "https://api.openai.com/v1" });
+  });
+
+  it("map the default sonnet tier to Z.ai's most accurate model (glm-4.7 misfiled in the comparison)", () => {
+    expect(resolveModel(backendFromStored({ name: "zai", ...PROVIDERS.zai }, "k"), "sonnet")).toBe("glm-5.3");
   });
 });

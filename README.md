@@ -120,7 +120,7 @@ There are two settings, one for each kind of use:
 | Setting | Used by | Default |
 |---|---|---|
 | **Chat model** | The item chat and the Library assistant | `sonnet` |
-| **Actions model** | Summarise, Suggest tags, Suggest collection, Suggest related | `haiku` |
+| **Actions model** | Summarise, Suggest tags, Suggest collection, Suggest related | `sonnet` |
 
 Each is either a **tier** (`default`, `opus`, `sonnet`, `haiku`) or an exact model ID. A tier means "this backend's model for that tier", so the same setting picks the right model on every backend:
 
@@ -129,9 +129,9 @@ Each is either a **tier** (`default`, `opus`, `sonnet`, `haiku`) or an exact mod
 
 For each backend, the first of these that's set wins: its own row in Settings → **Models** (`chatModel.<backend>`, `actionModel.<backend>`), then the shared setting, then the default above.
 
-Example: with the shared chat model `sonnet`, **claude → chat** set to `opus` and **zai → chat** set to `default`, chats on Claude use its opus model, chats on Z.ai use its default model, and any other backend uses its sonnet model; the actions use each backend's haiku model.
+Example: with the shared chat model `sonnet`, **claude → chat** set to `opus` and **zai → chat** set to `default`, chats on Claude use its opus model, chats on Z.ai use its default model, and any other backend uses its sonnet model; the actions use each backend's sonnet model.
 
-**Picking the actions model.** The default `haiku` is fast, but on Claude it gave the least accurate suggestions. In a comparison on 5 books (Suggest collection and Suggest related; Zotero 10.0.9, November 2026):
+**Why `sonnet` for the actions.** Before v0.13.1 the default was `haiku`, which is faster but gave the least accurate suggestions on Claude. In a comparison on 5 books (Suggest collection and Suggest related; Zotero 10.0.9, November 2026):
 
 | Backend | Model | Result | Suggest related, time per item |
 |---|---|---|---|
@@ -142,7 +142,7 @@ Example: with the shared chat model `sonnet`, **claude → chat** set to `opus` 
 | Z.ai | `glm-4.7` | One clear filing error | 4–8 s |
 | Z.ai | `glm-5.3` | Sharpest related picks | 13–20 s |
 
-If accuracy matters more than speed, set **actions** to `sonnet` or `opus` on Claude, and to whichever tier maps to glm-5.3 on Z.ai. Compare each provider on its own: one provider's results don't carry over to another.
+So the Z.ai preset now maps `sonnet` (as well as `default` and `opus`) to glm-5.3; a Z.ai provider saved before v0.13.1 keeps the models it was saved with. Set **actions** to `haiku` if speed matters more, or `opus` for the sharpest Claude suggestions. Compare each provider on its own: one provider's results don't carry over to another.
 
 To see which model answered: chat replies end with "*model* via *backend*", action results start with "From *model* via *backend*", and **Test** in the Backends list reports the chat model. The MCP endpoint itself uses no model: agents that call its tools use their own.
 
@@ -155,7 +155,7 @@ All are under `extensions.aiops-zotero-mcp.llm.` in the Config Editor; the Setti
 | `backends` | `[]` | Providers added in Settings (name, URL, format, key type, models; never the key) |
 | `profileFiles` | empty | Absolute paths to settings files, one per line or comma-separated |
 | `activeProfile` | the first backend | The backend in use, by name (a provider's name, or a settings file's name without `.settings.json`) |
-| `chatModel`, `actionModel` | `sonnet`, `haiku` | Model for the chats and the actions: a tier or a model ID |
+| `chatModel`, `actionModel` | `sonnet`, `sonnet` | Model for the chats and the actions: a tier or a model ID |
 | `chatModel.<backend>`, `actionModel.<backend>` | unset | The same, for one backend only |
 | `maxToolIterations` | 10 | Rounds of tool calls a chat may make before it must answer |
 | `maxToolResultChars` | 20000 | Most characters of one tool result the model sees |

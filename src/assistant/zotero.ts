@@ -37,7 +37,7 @@ export function numberPref(name: string, fallback: number, min: number, max: num
   return Number.isFinite(n) && n > 0 ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
 }
 
-const MODEL_DEFAULTS: Record<ModelUse, string> = { chatModel: "sonnet", actionModel: "haiku" };
+const MODEL_DEFAULTS: Record<ModelUse, string> = { chatModel: "sonnet", actionModel: "sonnet" };
 
 /** The model ID for a use on this backend (per-backend pref, shared pref, then default tier). */
 export function modelFor(backend: Backend, use: ModelUse): string {

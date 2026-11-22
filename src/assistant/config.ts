@@ -224,7 +224,7 @@ export const PROVIDERS: Record<string, Omit<StoredBackend, "name" | "models"> & 
     title: "Z.ai (GLM API key)",
     baseURL: "https://api.z.ai/api/anthropic",
     auth: "bearer",
-    models: { default: "glm-5.3", opus: "glm-5.3", sonnet: "glm-4.7", haiku: "glm-4.5-air" },
+    models: { default: "glm-5.3", opus: "glm-5.3", sonnet: "glm-5.3", haiku: "glm-4.5-air" },
   },
 };
 
