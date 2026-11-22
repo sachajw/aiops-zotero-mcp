@@ -1,3 +1,9 @@
+## v0.10.0 (2026-11-22)
+
+### Features
+
+- set up the assistant with an API key in Settings; https providers and x-api-key keys
+
 ## v0.9.0 (2026-11-22)
 
 ### Docs

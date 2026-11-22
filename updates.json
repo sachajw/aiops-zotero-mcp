@@ -3,8 +3,8 @@
     "aiops-zotero-mcp@sachajw.github.io": {
       "updates": [
         {
-          "version": "0.9.0",
-          "update_link": "https://github.com/sachajw/aiops-zotero-mcp/releases/download/v0.9.0/aiops-zotero-mcp-0.9.0.xpi",
+          "version": "0.10.0",
+          "update_link": "https://github.com/sachajw/aiops-zotero-mcp/releases/download/v0.10.0/aiops-zotero-mcp-0.10.0.xpi",
           "applications": {
             "zotero": {
               "strict_min_version": "7.0"
