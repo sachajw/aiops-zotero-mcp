@@ -50,5 +50,5 @@ Request path: `addon/bootstrap.js` → `src/index.ts` → `src/http/handler.ts` 
 
 - Commit messages follow `.cz.toml`: `<emoji> <LABEL>: <description>`, e.g. `🐛 FIX: ...`, `✨ FEATURE: ...`. The lefthook `commit-msg` hook and `.github/workflows/commitizen.yml` both enforce it. Pre-commit runs gitleaks, eslint and `tsc --noEmit`.
 - Release with `cz bump`: it bumps `package.json` and `updates.json`, updates `CHANGELOG.md`, and commits as `🚀 RELEASE: vX.Y.Z` with tag `vX.Y.Z`. `manifest.json` gets the version at build time. Then `mise run build`, `git push --follow-tags`, and `gh release create vX.Y.Z build/aiops-zotero-mcp-X.Y.Z.xpi`: `updates.json` points at that release asset.
-- `main` has no branch rules (GitHub offers none on this private free-plan repo), so commits go straight to `main` without a PR.
-- `updates.json` (committed) is the plugin's `update_url` target. While the repo is private Zotero can't fetch it, so updates are installed by hand.
+- `main` has no branch rules (checked with `gh api repos/sachajw/aiops-zotero-mcp/rules/branches/main`), so commits go straight to `main` without a PR.
+- `updates.json` (committed) is the plugin's `update_url` target, and the repo is public, so installed copies update themselves from it. Its `update_link` points at the release asset, so push the release commit and publish the GitHub release with the `.xpi` (`gh release create vX.Y.Z build/aiops-zotero-mcp-X.Y.Z.xpi`) together.

@@ -38,7 +38,7 @@ Items, collections and attachments are addressed by their 8-character Zotero key
 
 ## Install
 
-1. Get the `.xpi`: download it from the [latest release](https://github.com/sachajw/aiops-zotero-mcp/releases/latest) (the repo is private, so use a signed-in browser or `gh release download --repo sachajw/aiops-zotero-mcp -p '*.xpi'`), or build it: `mise install && mise run install && mise run build` gives `build/aiops-zotero-mcp-<version>.xpi`.
+1. Get the `.xpi`: download it from the [latest release](https://github.com/sachajw/aiops-zotero-mcp/releases/latest) (or `gh release download --repo sachajw/aiops-zotero-mcp -p '*.xpi'`), or build it: `mise install && mise run install && mise run build` gives `build/aiops-zotero-mcp-<version>.xpi`.
 2. In Zotero: **Tools → Plugins → gear → Install Plugin From File…**, choose the `.xpi`.
 3. Create a token and store it in fnox (the value never needs to be shown):
    ```bash
@@ -54,6 +54,8 @@ Items, collections and attachments are addressed by their 8-character Zotero key
 The port is Zotero's `httpServer.port` preference (23119 by default).
 
 ### Upgrade
+
+Zotero updates the plugin itself when the plugin's **Allow automatic updates** is On or Default (Default follows Zotero's global setting): it reads `updates.json` from this repo and downloads the release's `.xpi`. To upgrade by hand instead:
 
 1. Install the new version's `.xpi` the same way (Tools → Plugins → gear → Install Plugin From File…). It replaces the installed one; Zotero doesn't need a restart, and the token preference is kept.
 2. Restart your MCP client if it doesn't show new or changed tools; Claude Code reads the tool list only at startup.
@@ -93,6 +95,6 @@ fnox exec -P shell -- mise run test:live   # every tool against your running Zot
 ## Limits
 
 - **Transport:** stateless JSON responses only. There's no server-to-client stream (GET answers 405), so no progress notifications. Long `zotero_retrieve_metadata` runs return `pending` items instead; check them later with `zotero_get_item`.
-- **Updates:** `update_url` points at `updates.json` in this repo. While the repo is private, Zotero can't fetch it, so updates are manual (see [Upgrade](#upgrade)) and Zotero's "Allow automatic updates" setting has no effect.
+- **Updates:** automatic updates need a published GitHub release whose `.xpi` matches `updates.json` on `main`: commit the bumped `updates.json` and publish the release together, or Zotero sees a version whose download is missing.
 - **Search order:** `zotero_search_items` returns items in item-ID order (roughly the order they were added), not ranked by relevance.
 - **Group libraries:** read and write work where the group is editable, but `zotero_add_file` with `mode: "link"` is limited to My Library (Zotero's rule).
