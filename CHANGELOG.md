@@ -1,3 +1,9 @@
+## v0.5.0 (2026-11-22)
+
+### Features
+
+- chat about the open item in Zotero, with streaming, Stop and a settings pane
+
 ## v0.4.0 (2026-11-22)
 
 ### Features
