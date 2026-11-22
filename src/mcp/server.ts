@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   type JsonRpcNotification,
   type JsonRpcRequest,
@@ -8,7 +7,8 @@ import {
   negotiateProtocolVersion,
   successResponse,
 } from "./protocol.js";
-import { type ToolDefinition, ToolError, inputJsonSchema } from "./tool.js";
+import { runTool } from "./runner.js";
+import { type ToolDefinition, inputJsonSchema } from "./tool.js";
 
 export interface ServerInfo {
   name: string;
@@ -77,31 +77,11 @@ export class McpServer {
   }
 
   private async callTool(request: JsonRpcRequest): Promise<JsonRpcResponse> {
-    const name = request.params?.name;
-    const tool = typeof name === "string" ? this.tools.get(name) : undefined;
-    if (!tool) {
-      return errorResponse(request.id, JSONRPC_ERRORS.INVALID_PARAMS, `Unknown tool: ${String(name)}`);
+    const run = await runTool(this.tools, request.params?.name, request.params?.arguments, this.options);
+    if (run.kind === "unknown") {
+      return errorResponse(request.id, JSONRPC_ERRORS.INVALID_PARAMS, `Unknown tool: ${run.name}`);
     }
-
-    const parsed = tool.input.safeParse(request.params?.arguments ?? {});
-    if (!parsed.success) {
-      return successResponse(request.id, toolError(`Invalid arguments for ${tool.name}:\n${z.prettifyError(parsed.error)}`));
-    }
-
-    try {
-      await this.options.ready?.();
-      const output = await tool.run(parsed.data);
-      const text = output.data === undefined
-        ? output.summary
-        : `${output.summary}\n\n${JSON.stringify(output.data, null, 2)}`;
-      return successResponse(request.id, { content: [{ type: "text", text }], isError: false });
-    } catch (error) {
-      if (!(error instanceof ToolError)) {
-        this.options.logError?.(error);
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      return successResponse(request.id, toolError(message));
-    }
+    return successResponse(request.id, run.isError ? toolError(run.text) : { content: [{ type: "text", text: run.text }], isError: false });
   }
 }
 
