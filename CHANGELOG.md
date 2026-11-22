@@ -1,3 +1,13 @@
+## v0.4.0 (2026-11-22)
+
+### Features
+
+- in-Zotero assistant: summarise to note, suggest tags, suggest collections
+
+### Refactors
+
+- run tools through a shared runner
+
 ## v0.3.0 (2026-11-22)
 
 ### Features
