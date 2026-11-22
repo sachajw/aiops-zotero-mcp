@@ -1,3 +1,21 @@
+## v0.2.4 (2026-11-22)
+
+### Builds
+
+- ship LICENSE inside the .xpi
+
+### Chores
+
+- license under MIT
+
+### Docs
+
+- repo is public, so Zotero's automatic updates work
+
+### Security
+
+- upgrade eslint and typescript-eslint so minimatch is patched (GHSA-g3hv-75wg-m249)
+
 ## v0.2.3 (2026-11-22)
 
 ### Bug Fixes
