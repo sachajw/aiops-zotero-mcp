@@ -1,3 +1,9 @@
+## v0.13.2 (2026-11-22)
+
+### Bug Fixes
+
+- actions hint no longer mentions an Apply button
+
 ## v0.13.1 (2026-11-22)
 
 ### Bug Fixes
