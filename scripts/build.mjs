@@ -25,6 +25,8 @@ await build({
 });
 
 for (const f of ["bootstrap.js", "prefs.js"]) cpSync(join(root, "addon", f), join(stage, f));
+// MIT requires the licence notice in every copy, and the .xpi is the copy people install.
+cpSync(join(root, "LICENSE"), join(stage, "LICENSE"));
 const manifest = readFileSync(join(root, "addon", "manifest.json"), "utf8").replace("__VERSION__", version);
 writeFileSync(join(stage, "manifest.json"), manifest);
 
