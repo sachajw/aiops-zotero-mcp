@@ -2,7 +2,7 @@
  * DOM helpers for the Assistant UI. Everything is built with createElementNS and textContent:
  * the item pane is a privileged window, so model and document text must never be parsed as markup.
  */
-import { ACTIVE_PROFILE_PREF, PROFILE_FILES_PREF, profileFiles, profileLabel } from "../assistant/config.js";
+import { ACTIVE_PROFILE_PREF, BACKENDS_PREF, PROFILE_FILES_PREF, backendLabels } from "../assistant/config.js";
 
 export const HTML_NS = "http://www.w3.org/1999/xhtml";
 
@@ -32,7 +32,7 @@ export function checkbox(doc: Document, label: string, checked: boolean, note?: 
 
 /** The configured profile labels and the one in use. */
 export function backends(): { labels: string[]; active: string | undefined } {
-  const labels = profileFiles(Zotero.Prefs.get(PROFILE_FILES_PREF, true)).map(profileLabel);
+  const labels = backendLabels(Zotero.Prefs.get(PROFILE_FILES_PREF, true), Zotero.Prefs.get(BACKENDS_PREF, true));
   const wanted = String(Zotero.Prefs.get(ACTIVE_PROFILE_PREF, true) ?? "").trim();
   return { labels, active: wanted && labels.includes(wanted) ? wanted : labels[0] };
 }
@@ -46,7 +46,7 @@ export function backendPicker(doc: Document, onChange: () => void): HTMLElement 
   const { labels, active } = backends();
   const row = el(doc, "div", undefined, "margin: 0 0 6px 0;");
   if (!labels.length) {
-    row.append(el(doc, "span", `Model backend not set up: set ${PROFILE_FILES_PREF} in the Config Editor.`, "opacity: 0.7;"));
+    row.append(el(doc, "span", "No model backend yet: add one in Zotero Settings → Zotero MCP Assistant.", "opacity: 0.7;"));
     return row;
   }
   const select = el(doc, "select");

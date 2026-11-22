@@ -30,12 +30,13 @@ export interface SendOptions {
   onText?: (delta: string) => void;
 }
 
-/** Headers for a request; the token goes only in Authorization and is never logged. */
+/** Headers for a request, as Claude Code sends them: ANTHROPIC_API_KEY as x-api-key, ANTHROPIC_AUTH_TOKEN as Bearer. Keys are never logged. */
 export function requestHeaders(backend: Backend): Record<string, string> {
   return {
     "content-type": "application/json",
     "anthropic-version": ANTHROPIC_VERSION,
-    ...(backend.token ? { authorization: `Bearer ${backend.token}` } : {}),
+    ...(backend.apiKey ? { "x-api-key": backend.apiKey } : {}),
+    ...(backend.authToken ? { authorization: `Bearer ${backend.authToken}` } : {}),
   };
 }
 
@@ -100,7 +101,7 @@ function readWhole(backend: Backend, status: number, text: string): Message {
   if (status !== 200) {
     const detail = errorMessage(body) ?? (typeof body === "string" ? body.slice(0, 200) : "");
     const hint = status === 401 || status === 403
-      ? ` Check ANTHROPIC_AUTH_TOKEN in ${backend.file}; this proxy may need credentials the file doesn't have.`
+      ? ` Check the key for ${backend.label} in ${backend.file}: it may be wrong, expired, or of the wrong kind (x-api-key vs Bearer).`
       : "";
     throw new ToolError(`${backend.label} returned HTTP ${status}${detail ? `: ${detail}` : ""}.${hint}`);
   }

@@ -24,6 +24,10 @@ import {
   collectionKeysOf,
   itemContext,
   libraryTags,
+  listBackends,
+  providers,
+  removeBackend,
+  saveBackend,
   testConnection,
   transportDeps,
 } from "../assistant/zotero.js";
@@ -346,7 +350,7 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
   const win = Zotero.getMainWindow();
   if (win) addStrings(win);
   // The Settings pane's Test connection button calls this (its script runs in the Settings window).
-  (Zotero as unknown as Record<string, unknown>).AiopsZoteroMcp = { testConnection };
+  (Zotero as unknown as Record<string, unknown>).AiopsZoteroMcp = { testConnection, listBackends, saveBackend, removeBackend, providers };
   Zotero.PreferencePanes.register({
     pluginID,
     src: "content/preferences.xhtml",

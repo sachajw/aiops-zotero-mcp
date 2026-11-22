@@ -3,7 +3,7 @@ import { parseMessage } from "../../src/assistant/anthropic.js";
 import type { Backend } from "../../src/assistant/config.js";
 import { CancelledError, send } from "../../src/assistant/transport.js";
 
-const backend: Backend = { label: "zai", file: "/a/zai.settings.json", baseURL: "http://127.0.0.1:8788", token: "secret", models: { default: "m" } };
+const backend: Backend = { label: "zai", file: "/a/zai.settings.json", baseURL: "http://127.0.0.1:8788", authToken: "secret", models: { default: "m" } };
 const ok = { role: "assistant", model: "glm", content: [{ type: "thinking", thinking: "…", signature: "s" }, { type: "server_tool_use", id: "x" }, { type: "text", text: "hi" }], stop_reason: "end_turn" };
 
 function deps(respond: (url: string, init: Record<string, unknown>) => Promise<{ status: number; body: unknown }>) {
@@ -36,7 +36,7 @@ describe("send", () => {
   it("explains an auth failure without echoing the token", async () => {
     const d = deps(async () => ({ status: 401, body: { type: "error", error: { type: "authentication_error", message: "x-api-key header is required" } } }));
     const err = await send(d.deps, backend, { model: "m", max_tokens: 1, messages: [] }, { timeoutSeconds: 5 }).catch((e: Error) => e);
-    expect((err as Error).message).toMatch(/HTTP 401: x-api-key header is required\. Check ANTHROPIC_AUTH_TOKEN in \/a\/zai\.settings\.json/);
+    expect((err as Error).message).toMatch(/HTTP 401: x-api-key header is required\. Check the key for zai in \/a\/zai\.settings\.json/);
     expect((err as Error).message).not.toContain("secret");
   });
 

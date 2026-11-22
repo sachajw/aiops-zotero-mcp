@@ -85,11 +85,17 @@ The **Assistant** section (sparkle icon in the item pane, also in the reader's s
 
 Nothing changes until you click; the change runs through the same tools as the MCP endpoint (dry run first, then for real).
 
-**Set up:** point the plugin at one or more Claude-Code-style settings files: JSON with an `env` block holding `ANTHROPIC_BASE_URL`, optionally `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. Zotero → Settings → **Zotero MCP Assistant** has the main settings and a **Test connection** button; all of them are also in the Config Editor:
+**Set up** in Zotero → Settings → **Zotero MCP Assistant**, either way (both can be set up at once; the backend picker switches between them):
+
+1. **With an API key (most people):** under **Add a provider**, choose Anthropic, Z.ai or Other, paste the key and **Save**. The URL, key type and models are filled in and editable. The key goes in Zotero's password store, never in preferences; it's encrypted on disk, and protected by a password only if you set a primary password. Then **Test** it in the Backends list.
+2. **With Claude-Code-style settings files (a local proxy, or files you already use for Claude Code):** list their paths under **Settings files**. Each is JSON with an `env` block: `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY` (sent as `x-api-key`) and/or `ANTHROPIC_AUTH_TOKEN` (sent as `Authorization: Bearer`), and `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`. The file is read on every request, so a rotated key or changed model applies at once.
+
+The plugin never uses a Claude, Z.ai or other subscription itself: it sends the key you configure, or nothing to a local proxy that handles sign-in. The preferences, also in the Config Editor:
 
 | Preference (`extensions.aiops-zotero-mcp.llm.`) | Default | Meaning |
 |---|---|---|
 | `profileFiles` | empty | Absolute paths to settings files, one per line or comma-separated |
+| `backends` | `[]` | Providers added in Settings (name, URL, key type, models; never the key) |
 | `activeProfile` | first file | Which one to use, by file name without `.settings.json` (e.g. `zai`) |
 | `chatModel` | `sonnet` | Model for the chat: `default`, `opus`, `sonnet` or `haiku` from the file, or a literal model ID |
 | `actionModel` | `haiku` | Model for the actions (same choices) |
@@ -100,8 +106,8 @@ Nothing changes until you click; the change runs through the same tools as the M
 | `contextChars` | 60000 | Characters of full text sent with the item (max 100000) |
 | `requestTimeoutSeconds` | 120 | |
 
-- **Local proxies only:** `ANTHROPIC_BASE_URL` must be `127.0.0.1`, `localhost` or `[::1]`; anything else is refused.
-- **No stored secret:** the file is read on every request, so a rotated token or changed model takes effect at once; the plugin keeps no copy.
+- **Keys only travel encrypted:** a base URL must be `https://`, or plain `http://` to this computer only (`127.0.0.1`, `localhost`, `[::1]`).
+- **Where keys live:** in Zotero's password store for providers added in Settings; in your own file for settings files (read on every request, never copied).
 - **Models:** tested with Claude (`claude-haiku-5-5`) and Z.ai through an Anthropic-format proxy (`glm-4.5-air`, `glm-4.7`, `glm-5.3`). Models that answer in text instead of calling the proposal tool may reply with the same JSON object; anything else is reported as an error.
 - **Saved conversations:** each chat is saved as a JSON file in `aiops-zotero-mcp/chats/` inside your Zotero data directory, after every turn. They hold your questions, the replies and what the tools returned (so excerpts of your library), stay on this computer, and aren't synced. **New chat** deletes that conversation's file, and so does deleting the item permanently (trashing keeps it, since the item can come back); deleting the folder clears them all.
 - **What leaves Zotero:** the item's metadata and the start of its full text, sent to the proxy you configured; for tag and collection suggestions also your tag names and collection paths; in the chats, whatever their tools return (more of the text, annotations, notes, search results, change previews).
@@ -112,7 +118,7 @@ Nothing changes until you click; the change runs through the same tools as the M
 - **Browsers:** Zotero 10 drops any request carrying an `Origin` header before it reaches the plugin; the plugin also answers such requests with 403 itself, as the MCP spec requires (DNS rebinding).
 - **Auth:** bearer token, compared in constant time; 401 on a wrong or missing token, 503 while none is configured.
 - **Scope:** no tool runs arbitrary code, deletes permanently, empties the trash or touches Zotero settings (apart from switching off automatic metadata retrieval for the duration of `zotero_add_file`).
-- **Assistant:** talks only to loopback proxies, renders model output as plain text (never markup), and changes the library only through the same write tools, after a click.
+- **Assistant:** sends keys only over https or to this computer, stores them in Zotero's password store (or reads them from your own settings files), renders model output without parsing it as markup, and changes the library only through the same write tools, after a click.
 - **Logs:** with Zotero's debug output switched on, Zotero logs request headers, including the token. Leave debug output off in normal use.
 
 ## Develop

@@ -319,3 +319,17 @@ declare const PathUtils: {
   filename(path: string): string;
   join(...parts: string[]): string;
 };
+
+/** Firefox's login manager (Zotero's password store), as far as the plugin uses it. */
+declare const Services: {
+  logins: {
+    searchLoginsAsync(match: { origin: string; httpRealm: string }): Promise<Array<{ password: string }>>;
+    addLoginAsync(login: unknown): Promise<unknown>;
+    /** Zotero 10 (Firefox 140). */
+    removeLogin?(login: unknown): void;
+    /** Zotero 11 (Firefox 153). */
+    removeLoginAsync?(login: unknown): Promise<void>;
+  };
+};
+declare const Components: { Constructor(contract: string, iface: unknown, init: string): new (...args: unknown[]) => unknown };
+declare const Ci: { nsILoginInfo: unknown };

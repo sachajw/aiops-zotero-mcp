@@ -1,27 +1,42 @@
 <vbox id="aiops-llm-prefs">
   <groupbox>
     <label><html:h2>Assistant</html:h2></label>
-    <html:p style="margin-top: 0;">The Assistant (item pane) talks to a model through a proxy on this computer that speaks the Anthropic Messages API. Point it at Claude-Code-style settings files (JSON with env.ANTHROPIC_BASE_URL, optional ANTHROPIC_AUTH_TOKEN, and ANTHROPIC_MODEL / ANTHROPIC_DEFAULT_*_MODEL). Each file is read on every request; nothing is copied into Zotero.</html:p>
-    <label value="Settings files (absolute paths, one per line)"/>
-    <html:textarea id="aiops-llm-profile-files" rows="3" style="width: 100%;" preference="extensions.aiops-zotero-mcp.llm.profileFiles"/>
+    <html:p style="margin-top: 0;">The Assistant (item pane, and Tools → Library assistant) talks to a model that speaks the Anthropic Messages API. Add a provider with your API key below, or point at Claude-Code-style settings files (for a local proxy). Keys only travel over https, or plain http to this computer.</html:p>
+
+    <label><html:h3 style="margin-bottom: 4px;">Backends</html:h3></label>
+    <html:div id="aiops-llm-backends"/>
+    <label id="aiops-llm-backends-result" value=""/>
+
+    <label><html:h3 style="margin-bottom: 4px;">Add a provider</html:h3></label>
+    <html:div id="aiops-llm-add">
+      <html:div style="margin: 2px 0;">Provider <html:select id="aiops-llm-add-provider"/></html:div>
+      <html:div style="margin: 2px 0;">Name <html:input type="text" id="aiops-llm-add-name" style="width: 10em;" placeholder="e.g. anthropic"/></html:div>
+      <html:div style="margin: 2px 0;">Base URL <html:input type="text" id="aiops-llm-add-url" style="width: 22em;"/></html:div>
+      <html:div style="margin: 2px 0;">Key sent as <html:select id="aiops-llm-add-auth"><html:option value="x-api-key">x-api-key (Anthropic API keys)</html:option><html:option value="bearer">Authorization: Bearer</html:option></html:select></html:div>
+      <html:div style="margin: 2px 0;">API key <html:input type="password" id="aiops-llm-add-key" style="width: 22em;" autocomplete="off"/></html:div>
+      <html:div style="margin: 2px 0;">Models: default <html:input type="text" id="aiops-llm-add-m-default" style="width: 11em;"/> opus <html:input type="text" id="aiops-llm-add-m-opus" style="width: 11em;"/></html:div>
+      <html:div style="margin: 2px 0 6px 3.6em;">sonnet <html:input type="text" id="aiops-llm-add-m-sonnet" style="width: 11em;"/> haiku <html:input type="text" id="aiops-llm-add-m-haiku" style="width: 11em;"/></html:div>
+      <html:button id="aiops-llm-add-save">Save</html:button>
+      <label id="aiops-llm-add-result" value=""/>
+      <html:p style="opacity: 0.7;">The key is stored in Zotero's password store, not in preferences. Set a primary password (Zotero → Settings → Privacy &amp; Security, if available, or Firefox's login settings) to protect it with a password.</html:p>
+    </html:div>
+
+    <label><html:h3 style="margin-bottom: 4px;">Models</html:h3></label>
     <hbox align="center">
-      <label value="Backend in use (file name without .settings.json; empty = first)"/>
-      <html:input type="text" id="aiops-llm-active" preference="extensions.aiops-zotero-mcp.llm.activeProfile"/>
-    </hbox>
-    <hbox align="center">
-      <label value="Chat model (default, opus, sonnet, haiku, or a model ID)"/>
+      <label value="Chat model, shared (default, opus, sonnet, haiku, or a model ID)"/>
       <html:input type="text" id="aiops-llm-chat-model" preference="extensions.aiops-zotero-mcp.llm.chatModel"/>
     </hbox>
     <hbox align="center">
-      <label value="Actions model"/>
+      <label value="Actions model, shared"/>
       <html:input type="text" id="aiops-llm-action-model" preference="extensions.aiops-zotero-mcp.llm.actionModel"/>
     </hbox>
-    <html:p style="margin-bottom: 0;">Per backend (overrides the two above for that backend only; empty = use them). Tiers map to each settings file's own models, so e.g. "default" is the top model of whichever backend.</html:p>
+    <html:p style="margin-bottom: 0;">Per backend (overrides the two above for that backend only; empty = use them). Tiers map to each backend's own models.</html:p>
     <html:div id="aiops-llm-per-backend"/>
-    <hbox align="center">
-      <html:button id="aiops-llm-test">Test connection</html:button>
-      <label id="aiops-llm-test-result" value=""/>
-    </hbox>
+
+    <label><html:h3 style="margin-bottom: 4px;">Settings files (for a local proxy)</html:h3></label>
+    <label value="Absolute paths to Claude-Code-style settings files, one per line. Each is read on every request; nothing is copied into Zotero."/>
+    <html:textarea id="aiops-llm-profile-files" rows="3" style="width: 100%;" preference="extensions.aiops-zotero-mcp.llm.profileFiles"/>
+
     <html:p style="opacity: 0.7;">More settings (token limits, timeouts) are in the Config Editor under extensions.aiops-zotero-mcp.llm.</html:p>
   </groupbox>
 </vbox>

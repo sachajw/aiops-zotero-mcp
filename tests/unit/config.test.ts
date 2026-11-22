@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVE_PROFILE_PREF, PROFILE_FILES_PREF, assertLoopback, modelChoice, loadBackend, parseProfile, profileFiles, profileLabel, resolveModel } from "../../src/assistant/config.js";
+import { ACTIVE_PROFILE_PREF, PROFILE_FILES_PREF, assertBaseURL, modelChoice, loadBackend, parseProfile, profileFiles, profileLabel, resolveModel } from "../../src/assistant/config.js";
 import { requestHeaders } from "../../src/assistant/transport.js";
 
 const file = "/home/me/.ccs/zai.settings.json";
@@ -11,9 +11,10 @@ describe("profile settings files", () => {
     expect(profileFiles(" /a/x.settings.json\n\n/b/y.settings.json , /c/z.json")).toEqual(["/a/x.settings.json", "/b/y.settings.json", "/c/z.json"]);
   });
 
-  it("reads the base URL, token and model tiers", () => {
+  it("reads the base URL, both kinds of key and the model tiers", () => {
     const b = parseProfile(env({ ANTHROPIC_BASE_URL: "http://127.0.0.1:8788/", ANTHROPIC_AUTH_TOKEN: "t0k", ANTHROPIC_MODEL: "big", ANTHROPIC_DEFAULT_HAIKU_MODEL: "small" }), file);
-    expect(b).toEqual({ label: "zai", file, baseURL: "http://127.0.0.1:8788", token: "t0k", models: { default: "big", haiku: "small" } });
+    expect(b).toEqual({ label: "zai", file, baseURL: "http://127.0.0.1:8788", authToken: "t0k", models: { default: "big", haiku: "small" } });
+    expect(parseProfile(env({ ANTHROPIC_BASE_URL: "https://api.anthropic.com", ANTHROPIC_API_KEY: "sk", ANTHROPIC_MODEL: "m" }), file)).toMatchObject({ apiKey: "sk" });
     expect(resolveModel(b, "haiku")).toBe("small");
     expect(resolveModel(b, "sonnet")).toBe("big");
     expect(resolveModel(b, "glm-4.7")).toBe("glm-4.7");
@@ -21,9 +22,11 @@ describe("profile settings files", () => {
 
   it("allows a profile without a token, and then sends no Authorization header", () => {
     const b = parseProfile(env({ ANTHROPIC_BASE_URL: "http://localhost:1234", ANTHROPIC_MODEL: "m" }), file);
-    expect(b.token).toBeUndefined();
+    expect(b.authToken).toBeUndefined();
     expect(requestHeaders(b)).not.toHaveProperty("authorization");
-    expect(requestHeaders({ ...b, token: "x" })).toMatchObject({ authorization: "Bearer x", "anthropic-version": "2023-06-01" });
+    expect(requestHeaders({ ...b, authToken: "x" })).toMatchObject({ authorization: "Bearer x", "anthropic-version": "2023-06-01" });
+    expect(requestHeaders({ ...b, apiKey: "k" })).toMatchObject({ "x-api-key": "k" });
+    expect(requestHeaders({ ...b, apiKey: "k" })).not.toHaveProperty("authorization");
   });
 
   it("names the missing key or broken file", () => {
@@ -33,24 +36,26 @@ describe("profile settings files", () => {
     expect(() => resolveModel(noModel, "default")).toThrow(/no env.ANTHROPIC_MODEL/);
   });
 
-  it("only allows local proxies", () => {
-    for (const ok of ["http://127.0.0.1:8787", "http://localhost:1234", "https://localhost", "http://[::1]:8080"]) {
-      expect(() => assertLoopback(ok, "x"), ok).not.toThrow();
+  it("sends keys only over https, or plain http to this computer", () => {
+    for (const ok of ["http://127.0.0.1:8787", "http://localhost:1234", "https://localhost", "http://[::1]:8080", "https://api.anthropic.com", "https://api.z.ai/api/anthropic"]) {
+      expect(() => assertBaseURL(ok, "x"), ok).not.toThrow();
     }
-    for (const bad of ["http://192.168.0.9:1234", "https://integrate.api.nvidia.com", "file:///etc/passwd", "http://127.0.0.1.evil.com", "nonsense"]) {
-      expect(() => assertLoopback(bad, "x"), bad).toThrow();
+    for (const bad of ["http://192.168.0.9:1234", "http://api.anthropic.com", "file:///etc/passwd", "http://127.0.0.1.evil.com", "ftp://localhost", "nonsense"]) {
+      expect(() => assertBaseURL(bad, "x"), bad).toThrow();
     }
   });
 });
 
 describe("loadBackend", () => {
   const files = { "/a/zai.settings.json": env({ ANTHROPIC_BASE_URL: "http://127.0.0.1:8788", ANTHROPIC_MODEL: "glm" }), "/a/claude.settings.json": env({ ANTHROPIC_BASE_URL: "http://127.0.0.1:8787", ANTHROPIC_MODEL: "c" }) } as Record<string, string>;
+  const keys: Record<string, string> = { anthropic: "sk-ant" };
   const reader = (prefs: Record<string, string>) => ({
     pref: (n: string) => prefs[n],
     readFile: async (p: string) => {
       if (!(p in files)) throw new Error("ENOENT");
       return files[p];
     },
+    readKey: async (n: string) => keys[n],
   });
 
   it("uses the active profile, or the first one", async () => {
@@ -60,8 +65,8 @@ describe("loadBackend", () => {
   });
 
   it("explains what to set when nothing or the wrong thing is configured", async () => {
-    await expect(loadBackend(reader({}))).rejects.toThrow(/No model backend configured/);
-    await expect(loadBackend(reader({ [PROFILE_FILES_PREF]: "/a/zai.settings.json", [ACTIVE_PROFILE_PREF]: "nope" }))).rejects.toThrow(/isn't one of: zai/);
+    await expect(loadBackend(reader({}))).rejects.toThrow(/No model backend set up/);
+    await expect(loadBackend(reader({ [PROFILE_FILES_PREF]: "/a/zai.settings.json", [ACTIVE_PROFILE_PREF]: "nope" }))).rejects.toThrow(/set up ones are: zai/);
     await expect(loadBackend(reader({ [PROFILE_FILES_PREF]: "/a/missing.settings.json" }))).rejects.toThrow(/can't read/);
   });
 });
@@ -74,5 +79,36 @@ describe("modelChoice", () => {
     expect(modelChoice(pref, "chatModel", "zai", "x")).toBe("default");
     expect(modelChoice(pref, "chatModel", "claude", "x")).toBe("sonnet");
     expect(modelChoice(() => undefined, "actionModel", "zai", "haiku")).toBe("haiku");
+  });
+});
+
+import { BACKENDS_PREF, PROVIDERS, backendLabels, parseStoredBackends, validateStoredBackend } from "../../src/assistant/config.js";
+
+describe("providers added in Settings", () => {
+  const anthropic = { name: "anthropic", ...PROVIDERS.anthropic };
+  const zaiStored = { name: "zai-direct", baseURL: "https://api.z.ai/api/anthropic/", auth: "bearer", models: { default: "glm-5.3", haiku: "" } };
+
+  it("validates the form, trims the URL, drops empty models and refuses a taken name or plain http", () => {
+    expect(validateStoredBackend(zaiStored, [])).toEqual({ name: "zai-direct", baseURL: "https://api.z.ai/api/anthropic", auth: "bearer", models: { default: "glm-5.3" } });
+    expect(() => validateStoredBackend(zaiStored, ["zai-direct"])).toThrow(/already the name/);
+    expect(() => validateStoredBackend({ ...zaiStored, baseURL: "http://example.com" }, [])).toThrow(/https/);
+    expect(() => validateStoredBackend({ ...zaiStored, name: "Bad Name" }, [])).toThrow();
+    expect(() => validateStoredBackend({ ...zaiStored, models: {} }, [])).toThrow();
+  });
+
+  it("skips invalid saved entries and lists files before providers", () => {
+    const pref = JSON.stringify([anthropic, { name: "broken" }]);
+    expect(parseStoredBackends(pref).map((b) => b.name)).toEqual(["anthropic"]);
+    expect(parseStoredBackends("not json")).toEqual([]);
+    expect(backendLabels("/a/zai.settings.json", pref)).toEqual(["zai", "anthropic"]);
+  });
+
+  it("loads a provider with its key from the password store, sent as the right header", async () => {
+    const prefs = { [BACKENDS_PREF]: JSON.stringify([anthropic, { ...zaiStored, baseURL: "https://api.z.ai/api/anthropic" }]), [ACTIVE_PROFILE_PREF]: "anthropic" };
+    const read = { pref: (n: string) => (prefs as Record<string, string>)[n], readFile: async () => "", readKey: async (n: string) => (n === "anthropic" ? "sk-ant" : undefined) };
+    const b = await loadBackend(read);
+    expect(b).toMatchObject({ label: "anthropic", baseURL: "https://api.anthropic.com", apiKey: "sk-ant" });
+    expect(requestHeaders(b)).toMatchObject({ "x-api-key": "sk-ant" });
+    await expect(loadBackend(read, "zai-direct")).rejects.toThrow(/no API key is saved/);
   });
 });
