@@ -15,6 +15,7 @@ import {
   zKey,
   zLibraryID,
 } from "../zotero/library.js";
+import { suspender } from "../zotero/suspend.js";
 
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 const WRITE_IDEMPOTENT = { ...WRITE, idempotentHint: true };
@@ -64,6 +65,16 @@ function toZoteroCreators(creators: Array<z.infer<typeof zCreator>>): ZoteroAPI.
       ? { creatorType: c.creator_type, name: c.name }
       : { creatorType: c.creator_type, firstName: c.first_name, lastName: c.last_name },
   );
+}
+
+/** Apply a change to every item and save them in one DB transaction: a failed save rolls back the rest. */
+async function saveAllOrNone(items: ZoteroAPI.Item[], change: (item: ZoteroAPI.Item) => void): Promise<void> {
+  await Zotero.DB.executeTransaction(async () => {
+    for (const item of items) {
+      change(item);
+      await item.save();
+    }
+  });
 }
 
 function topLevel(item: ZoteroAPI.Item, what: string): void {
@@ -204,6 +215,17 @@ export const updateItem = defineTool({
 
 // ---------------------------------------------------------------- attachments
 
+/**
+ * Auto-recognition off while adding, so Zotero doesn't wrap the PDF in a guessed parent item.
+ * Shared across overlapping zotero_add_file calls, so the user's setting comes back after the last.
+ */
+const AUTO_RECOGNIZE_PREF = "extensions.zotero.autoRecognizeFiles";
+const withoutAutoRecognize = suspender(
+  () => Zotero.Prefs.get(AUTO_RECOGNIZE_PREF, true),
+  (v) => Zotero.Prefs.set(AUTO_RECOGNIZE_PREF, v, true),
+  false,
+);
+
 export const addFile = defineTool({
   name: "zotero_add_file",
   title: "Add file",
@@ -244,18 +266,11 @@ export const addFile = defineTool({
       title,
       ...(parent ? { parentItemID: parent.id } : { collections: collections.map((c) => c.id) }),
     };
-    // Turn off auto-recognition while adding, so Zotero doesn't wrap the PDF in a guessed parent item.
-    const prefName = "extensions.zotero.autoRecognizeFiles";
-    const autoRecognize = Zotero.Prefs.get(prefName, true);
-    Zotero.Prefs.set(prefName, false, true);
-    let attachment: ZoteroAPI.Item;
-    try {
-      attachment = args.mode === "import"
-        ? await Zotero.Attachments.importFromFile({ ...common, libraryID })
-        : await Zotero.Attachments.linkFromFile(common);
-    } finally {
-      Zotero.Prefs.set(prefName, autoRecognize, true);
-    }
+    const attachment = await withoutAutoRecognize(() =>
+      args.mode === "import"
+        ? Zotero.Attachments.importFromFile({ ...common, libraryID })
+        : Zotero.Attachments.linkFromFile(common),
+    );
     return { summary: `Added ${attachment.key}`, data: await attachmentView(attachment) };
   },
 });
@@ -418,11 +433,10 @@ export const setCollections = defineTool({
     const remove = args.remove.map((k) => getCollection(libraryID, k));
     const plan = { items: items.map((i) => i.key), add: add.map((c) => `${c.key} ${c.name}`), remove: remove.map((c) => `${c.key} ${c.name}`) };
     if (args.dry_run) return dryRunResult(`Would change collections of ${count(items.length, "item")}`, plan);
-    for (const item of items) {
+    await saveAllOrNone(items, (item) => {
       add.forEach((c) => item.addToCollection(c.id));
       remove.forEach((c) => item.removeFromCollection(c.id));
-      await item.saveTx();
-    }
+    });
     return { summary: `Updated collections of ${count(items.length, "item")}`, data: plan };
   },
 });
@@ -445,11 +459,10 @@ export const setTags = defineTool({
     const items = args.item_keys.map((k) => getItem(libraryID, k));
     const plan = { items: items.map((i) => i.key), add: args.add, remove: args.remove };
     if (args.dry_run) return dryRunResult(`Would change tags on ${count(items.length, "item")}`, plan);
-    for (const item of items) {
+    await saveAllOrNone(items, (item) => {
       args.add.forEach((t) => item.addTag(t));
       args.remove.forEach((t) => item.removeTag(t));
-      await item.saveTx();
-    }
+    });
     return { summary: `Updated tags on ${count(items.length, "item")}`, data: plan };
   },
 });
@@ -525,10 +538,9 @@ export const restoreItems = defineTool({
     if (notTrashed.length) throw new ToolError(`Not in the trash: ${notTrashed.join(", ")}`);
     const plan = items.map(itemSummary);
     if (args.dry_run) return dryRunResult(`Would restore ${count(items.length, "item")}`, plan);
-    for (const item of items) {
+    await saveAllOrNone(items, (item) => {
       item.deleted = false;
-      await item.saveTx();
-    }
+    });
     return { summary: `Restored ${count(items.length, "item")}`, data: items.map(itemSummary) };
   },
 });

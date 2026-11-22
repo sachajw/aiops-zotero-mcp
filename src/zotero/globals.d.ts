@@ -61,6 +61,8 @@ declare namespace ZoteroAPI {
     annotationColor?: string;
     annotationPageLabel?: string;
     saveTx(): Promise<number | boolean>;
+    /** Save inside the caller's Zotero.DB.executeTransaction. */
+    save(): Promise<number | boolean>;
     toJSON(options?: { mode?: "full" }): Record<string, unknown>;
   }
 
@@ -124,6 +126,9 @@ declare const Zotero: {
   initializationPromise: Promise<void>;
   debug(message: string, level?: number): void;
   logError(error: unknown): void;
+  DB: {
+    executeTransaction<T>(fn: () => Promise<T>): Promise<T>;
+  };
   Prefs: {
     get(name: string, global?: boolean): unknown;
     set(name: string, value: unknown, global?: boolean): void;

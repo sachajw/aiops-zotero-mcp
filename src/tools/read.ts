@@ -82,7 +82,8 @@ export const searchItems = defineTool({
     if (args.top_level_only) search.addCondition("noChildren", "true");
     if (args.include_trashed) search.addCondition("includeDeleted", "true");
 
-    const ids = await search.search();
+    // Zotero.Search has no ORDER BY, so sort: offset/limit pages must not repeat or skip items.
+    const ids = (await search.search()).sort((a, b) => a - b);
     const page = ids.slice(args.offset, args.offset + args.limit);
     const items = await Zotero.Items.getAsync(page);
     const shown = items.length;
