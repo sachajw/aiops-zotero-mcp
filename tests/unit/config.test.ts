@@ -112,3 +112,16 @@ describe("providers added in Settings", () => {
     await expect(loadBackend(read, "zai-direct")).rejects.toThrow(/no API key is saved/);
   });
 });
+
+describe("gateways on this computer", () => {
+  it("can be added and used without a key; a remote provider can't", async () => {
+    const gw = { name: "gw", baseURL: "http://127.0.0.1:8787", auth: "bearer" as const, models: { default: "claude-sonnet-5-5" } };
+    const read = (backends: unknown[]) => ({ pref: (n: string) => (n === BACKENDS_PREF ? JSON.stringify(backends) : undefined), readFile: async () => "", readKey: async () => undefined });
+    const b = await loadBackend(read([gw]));
+    expect(b).toMatchObject({ label: "gw", baseURL: "http://127.0.0.1:8787" });
+    expect(requestHeaders(b)).not.toHaveProperty("authorization");
+    expect(requestHeaders(b)).not.toHaveProperty("x-api-key");
+    await expect(loadBackend(read([{ ...gw, baseURL: "https://api.example.com" }]))).rejects.toThrow(/no API key/);
+    expect(PROVIDERS.gateway.baseURL).toMatch(/^http:\/\/127\.0\.0\.1/);
+  });
+});

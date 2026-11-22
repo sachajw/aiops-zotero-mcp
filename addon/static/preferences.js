@@ -109,7 +109,7 @@
       option.value = id;
       select.append(option);
     }
-    const custom = el("option", "Other (any https endpoint that speaks the Anthropic Messages API)");
+    const custom = el("option", "Other (any https endpoint, or http on this computer, that speaks the Anthropic Messages API)");
     custom.value = "custom";
     select.append(custom);
     const fill = () => {

@@ -16,6 +16,7 @@ import {
   PROFILE_FILES_PREF,
   PROVIDERS,
   backendLabels,
+  isLoopback,
   loadBackend,
   modelChoice,
   parseStoredBackends,
@@ -99,10 +100,11 @@ export async function saveBackend(input: { name: unknown; baseURL: unknown; auth
   const taken = backendLabels(pref(PROFILE_FILES_PREF), "[]");
   const def = validateStoredBackend({ name: input.name, baseURL: input.baseURL, auth: input.auth, models: input.models }, [...taken, ...stored.map((b) => b.name)]);
   const key = typeof input.key === "string" ? input.key.trim() : "";
-  if (!key) throw new Error("Enter the API key");
-  await keyStore.write(def.name, key);
+  if (key) await keyStore.write(def.name, key);
+  else if (!isLoopback(def.baseURL)) throw new Error("Enter the API key (only a gateway on this computer can do without one)");
+  else await keyStore.remove(def.name);
   Zotero.Prefs.set(BACKENDS_PREF, JSON.stringify([...stored, def]), true);
-  return `Saved ${def.name}. Its key is in Zotero's password store.`;
+  return key ? `Saved ${def.name}. Its key is in Zotero's password store.` : `Saved ${def.name}, without a key (the gateway signs in by itself).`;
 }
 
 export async function removeBackend(name: string): Promise<void> {

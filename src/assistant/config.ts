@@ -57,6 +57,14 @@ const LOOPBACK = ["127.0.0.1", "localhost", "[::1]", "::1"];
  * A base URL keys may be sent to: https to any host, or plain http to this computer only (a local
  * proxy or model server). A key must never cross a network unencrypted.
  */
+export function isLoopback(url: string): boolean {
+  try {
+    return LOOPBACK.includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function assertBaseURL(url: string, label: string): void {
   let host: string;
   let protocol: string;
@@ -156,12 +164,18 @@ const zStoredBackend = z.object({
 });
 
 /** Starting points for the Settings form; every field stays editable. */
-export const PROVIDERS: Record<string, Omit<StoredBackend, "name"> & { title: string }> = {
+export const PROVIDERS: Record<string, Omit<StoredBackend, "name" | "models"> & { title: string; models: Record<string, string> }> = {
   anthropic: {
     title: "Anthropic (Claude API key)",
     baseURL: "https://api.anthropic.com",
     auth: "x-api-key",
     models: { default: "claude-sonnet-5-5", opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-5-5" },
+  },
+  gateway: {
+    title: "Local gateway or proxy on this computer (key optional)",
+    baseURL: "http://127.0.0.1:8080",
+    auth: "bearer",
+    models: { default: "" },
   },
   zai: {
     title: "Z.ai (GLM API key)",
@@ -199,12 +213,13 @@ export function validateStoredBackend(input: unknown, takenLabels: string[]): St
 
 export function backendFromStored(def: StoredBackend, key: string | undefined): Backend {
   assertBaseURL(def.baseURL, def.name);
-  if (!key) throw new ToolError(`${def.name}: no API key is saved for it. Add it again in ${SETTINGS_SOURCE}.`);
+  // A gateway on this computer may sign in by itself; anywhere else a key is required.
+  if (!key && !isLoopback(def.baseURL)) throw new ToolError(`${def.name}: no API key is saved for it. Add it again in ${SETTINGS_SOURCE}.`);
   return {
     label: def.name,
     file: SETTINGS_SOURCE,
     baseURL: def.baseURL.replace(/\/+$/, ""),
-    ...(def.auth === "x-api-key" ? { apiKey: key } : { authToken: key }),
+    ...(key ? (def.auth === "x-api-key" ? { apiKey: key } : { authToken: key }) : {}),
     models: def.models,
   };
 }
