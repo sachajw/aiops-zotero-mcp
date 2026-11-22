@@ -118,3 +118,26 @@ export function describeKey(libraryID: number, key: string): string | undefined 
   if (collection) return `${key}: collection ${collectionPath(collection, (id) => Zotero.Collections.get(id))}`;
   return undefined;
 }
+
+/**
+ * Saved conversations, in "aiops-zotero-mcp/chats" inside Zotero's data directory (next to
+ * zotero.sqlite, never synced). Names come from store.ts's storeFileName, so they're always plain
+ * file names.
+ */
+export const chatStore = {
+  dir(): string {
+    return PathUtils.join(Zotero.DataDirectory.dir, "aiops-zotero-mcp", "chats");
+  },
+  async read(name: string): Promise<string | undefined> {
+    const path = PathUtils.join(this.dir(), name);
+    return (await IOUtils.exists(path)) ? IOUtils.readUTF8(path) : undefined;
+  },
+  async write(name: string, json: string): Promise<void> {
+    await IOUtils.makeDirectory(this.dir(), { createAncestors: true, ignoreExisting: true });
+    const path = PathUtils.join(this.dir(), name);
+    await IOUtils.writeUTF8(path, json, { tmpPath: `${path}.tmp` });
+  },
+  async remove(name: string): Promise<void> {
+    await IOUtils.remove(PathUtils.join(this.dir(), name), { ignoreAbsent: true });
+  },
+};

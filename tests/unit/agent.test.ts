@@ -103,7 +103,43 @@ describe("runAgent", () => {
     const s2 = scripted([uses(["search", { q: "x" }])]);
     s2.send.mockImplementationOnce(async () => { cancelled = true; return uses(["search", { q: "x" }]); });
     const out2 = await runAgent(history, options(s2.send, { isCancelled: () => cancelled }));
-    expect(out2).toEqual({ messages: history, text: "", stopped: "cancelled" });
+    expect(out2).toEqual({ messages: history, text: "", stopped: "cancelled", kept: false });
+  });
+
+  it("keeps an approved change when stopped later in the turn, closing the turn validly", async () => {
+    writes.length = 0;
+    let cancelled = false;
+    const s = scripted([uses(["tag", { keys: ["K"], add: ["x"] }], ["search", { q: "more" }])]);
+    const out = await runAgent([{ role: "user", content: "tag then search" }], options(s.send, {
+      approve: async () => true,
+      onEvent: (e) => { if (e.type === "tool_result" && e.name === "tag") cancelled = true; },
+      isCancelled: () => cancelled,
+    }));
+    expect(writes).toEqual([{ keys: ["K"], add: ["x"], dry_run: false }]);
+    expect(out).toMatchObject({ stopped: "cancelled", kept: true });
+    const [, assistantUses, results, closing] = out.messages;
+    expect(assistantUses.role).toBe("assistant");
+    expect(results).toEqual({ role: "user", content: [
+      { type: "tool_result", tool_use_id: "tu_0", content: "tagged K" },
+      { type: "tool_result", tool_use_id: "tu_1", content: "Not run: the user stopped this turn.", is_error: true },
+    ] });
+    expect(closing).toEqual({ role: "assistant", content: [{ type: "text", text: "(Stopped by the user.)" }] });
+  });
+
+  it("keeps earlier rounds when stopped while the model is replying", async () => {
+    let cancelled = false;
+    const s = scripted([uses(["search", { q: "a" }])]);
+    s.send.mockImplementationOnce(async () => uses(["search", { q: "a" }]));
+    s.send.mockImplementationOnce(async () => { cancelled = true; throw new Error("aborted"); });
+    const out = await runAgent([{ role: "user", content: "go" }], options(s.send, { isCancelled: () => cancelled }));
+    expect(out).toMatchObject({ stopped: "cancelled", kept: true });
+    expect(out.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
+  });
+
+  it("passes real errors through", async () => {
+    const s = scripted([]);
+    s.send.mockImplementationOnce(async () => { throw new Error("HTTP 500"); });
+    await expect(runAgent([{ role: "user", content: "go" }], options(s.send))).rejects.toThrow("HTTP 500");
   });
 });
 

@@ -162,6 +162,9 @@ declare namespace ZoteroUI {
 
 declare const Zotero: {
   version: string;
+  /** Opens a URL in the system browser. */
+  launchURL(url: string): void;
+  DataDirectory: { dir: string };
   getMainWindow(): (Window & typeof globalThis & {
     ZoteroPane: { itemPane?: { _itemDetails?: { scrollToPane(paneID: string): void } }; getSelectedItems(): ZoteroAPI.Item[] };
     MozXULElement: { insertFTLIfNeeded(file: string): void };
@@ -289,10 +292,14 @@ declare const Zotero: {
 declare const IOUtils: {
   exists(path: string): Promise<boolean>;
   readUTF8(path: string): Promise<string>;
+  writeUTF8(path: string, text: string, options?: { tmpPath?: string }): Promise<number>;
+  makeDirectory(path: string, options?: { createAncestors?: boolean; ignoreExisting?: boolean }): Promise<void>;
+  remove(path: string, options?: { ignoreAbsent?: boolean; recursive?: boolean }): Promise<void>;
   stat(path: string): Promise<{ type: "regular" | "directory" | "other"; size: number }>;
 };
 
 declare const PathUtils: {
   isAbsolute(path: string): boolean;
   filename(path: string): string;
+  join(...parts: string[]): string;
 };

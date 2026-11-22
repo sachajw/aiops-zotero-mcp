@@ -53,6 +53,8 @@ export interface AgentOutcome {
   text: string;
   /** Why it stopped early, if it did. */
   stopped?: "max_iterations" | "cancelled";
+  /** When cancelled: whether part of the turn was kept (a tool had run). */
+  kept?: boolean;
 }
 
 export function truncate(text: string, max: number): string {
@@ -88,38 +90,76 @@ async function runToolCall(use: ToolUseBlock, options: AgentOptions): Promise<To
   return result(real.text, real.isError);
 }
 
+export const STOPPED_REPLY = "(Stopped by the user.)";
+const NOT_RUN = "Not run: the user stopped this turn.";
+
 export async function runAgent(history: MessageParam[], options: AgentOptions): Promise<AgentOutcome> {
   const messages = [...history];
   const params = options.tools.map((t) => t.param);
-  for (let i = 0; i < options.maxIterations; i++) {
-    if (options.isCancelled()) return { messages: history, text: "", stopped: "cancelled" };
-    // The last allowed round may not call tools, so the model answers with what it has.
-    const last = i === options.maxIterations - 1;
-    const reply = await options.send(
-      { ...options.request, messages, ...(params.length ? { tools: params, tool_choice: { type: last ? "none" : "auto" } } : {}) },
-      (delta) => options.onEvent({ type: "text", delta }),
-    );
-    const uses = toolUsesOf(reply);
-    messages.push({ role: "assistant", content: reply.content as ContentBlock[] });
-    if (!uses.length || reply.stop_reason !== "tool_use" || last) {
-      if (uses.length && last) {
-        // The model ignored tool_choice none: keep the history valid by answering its calls.
-        messages.push({ role: "user", content: uses.map((u) => ({ type: "tool_result" as const, tool_use_id: u.id, content: "Not run: the tool-use limit was reached.", is_error: true })) });
+  /** The round whose tool calls are being answered, if any. */
+  let open: { uses: ToolUseBlock[]; results: ToolResultBlock[] } | undefined;
+  /** Whether any tool actually ran this turn (so stopping has something to keep). */
+  let ran = false;
+
+  /**
+   * Stopped by the user. If nothing ran, the turn is dropped as if it never happened. Otherwise the
+   * part that ran is kept (an approved change stays in the history, so the model knows about it):
+   * unanswered tool calls get "not run" results and an assistant reply closes the turn, so the
+   * conversation stays valid for the next question.
+   */
+  const stop = (): AgentOutcome => {
+    if (!ran) return { messages: history, text: "", stopped: "cancelled", kept: false };
+    if (open) {
+      const answered = new Set(open.results.map((r) => r.tool_use_id));
+      const notRun = open.uses
+        .filter((u) => !answered.has(u.id))
+        .map((u): ToolResultBlock => ({ type: "tool_result", tool_use_id: u.id, content: NOT_RUN, is_error: true }));
+      messages.push({ role: "user", content: [...open.results, ...notRun] });
+    }
+    messages.push({ role: "assistant", content: [{ type: "text", text: STOPPED_REPLY }] });
+    options.onEvent({ type: "turn_done" });
+    return { messages, text: "", stopped: "cancelled", kept: true };
+  };
+
+  try {
+    for (let i = 0; i < options.maxIterations; i++) {
+      if (options.isCancelled()) return stop();
+      // The last allowed round may not call tools, so the model answers with what it has.
+      const last = i === options.maxIterations - 1;
+      const reply = await options.send(
+        { ...options.request, messages, ...(params.length ? { tools: params, tool_choice: { type: last ? "none" : "auto" } } : {}) },
+        (delta) => options.onEvent({ type: "text", delta }),
+      );
+      const uses = toolUsesOf(reply);
+      if (!uses.length || reply.stop_reason !== "tool_use" || last) {
+        messages.push({ role: "assistant", content: reply.content as ContentBlock[] });
+        if (uses.length && last) {
+          // The model ignored tool_choice none: keep the history valid by answering its calls.
+          messages.push({ role: "user", content: uses.map((u) => ({ type: "tool_result" as const, tool_use_id: u.id, content: "Not run: the tool-use limit was reached.", is_error: true })) });
+          options.onEvent({ type: "turn_done" });
+          return { messages, text: textOf(reply), stopped: "max_iterations" };
+        }
         options.onEvent({ type: "turn_done" });
-        return { messages, text: textOf(reply), stopped: "max_iterations" };
+        return { messages, text: textOf(reply) };
       }
-      options.onEvent({ type: "turn_done" });
-      return { messages, text: textOf(reply) };
+      if (options.isCancelled()) return stop();
+      messages.push({ role: "assistant", content: reply.content as ContentBlock[] });
+      open = { uses, results: [] };
+      for (const use of uses) {
+        if (options.isCancelled()) return stop();
+        options.onEvent({ type: "tool", name: use.name, input: use.input });
+        const r = await runToolCall(use, options);
+        ran = true;
+        options.onEvent({ type: "tool_result", name: use.name, isError: Boolean(r.is_error), text: r.content });
+        open.results.push(r);
+      }
+      messages.push({ role: "user", content: open.results });
+      open = undefined;
     }
-    const results: ToolResultBlock[] = [];
-    for (const use of uses) {
-      if (options.isCancelled()) return { messages: history, text: "", stopped: "cancelled" };
-      options.onEvent({ type: "tool", name: use.name, input: use.input });
-      const r = await runToolCall(use, options);
-      options.onEvent({ type: "tool_result", name: use.name, isError: Boolean(r.is_error), text: r.content });
-      results.push(r);
-    }
-    messages.push({ role: "user", content: results });
+  } catch (error) {
+    // A cancelled request rejects; anything else is a real error for the caller.
+    if (options.isCancelled()) return stop();
+    throw error;
   }
   options.onEvent({ type: "turn_done" });
   return { messages, text: "", stopped: "max_iterations" };

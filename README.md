@@ -71,9 +71,9 @@ Optional: `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (default 45)
 
 The **Assistant** section (sparkle icon in the item pane, also in the reader's side pane, and **Assistant** in the item's right-click menu) has a chat and three actions.
 
-**Chat:** ask about the open item. The model starts from the item's metadata and the start of its full text, and can read more of it, your annotations and notes, search the rest of the library and format citations. It can't change anything. Replies stream in; **Stop** cancels, **New chat** starts over, and the backend picker switches between your configured backends mid-conversation. Each item keeps its own conversation while Zotero is open.
+**Chat:** ask about the open item. The model starts from the item's metadata and the start of its full text, and can read more of it, your annotations and notes, search the rest of the library and format citations. It can't change anything. Replies stream in, formatted (headings, lists, bold, code, tables; links open in your browser). **Stop** cancels, **New chat** starts over, and the backend picker switches between your configured backends mid-conversation. Each item keeps its own conversation, saved so it's still there after Zotero restarts.
 
-**Library assistant** (Tools → Library assistant…, or right-click a collection → Ask the library assistant about this collection…): a chat in its own window that can search the whole library and make changes: file items in collections, add or remove tags, add notes, create or rename collections, edit fields, trash and restore. Every change is first run as a dry run and shown as a card, with the item and collection keys resolved to titles and paths; it runs only when you click **Approve**. **Reject** tells the model you declined; **Stop** cancels the turn and any waiting change. It can't add files from disk or retrieve metadata from zotero.org.
+**Library assistant** (Tools → Library assistant…, or right-click a collection → Ask the library assistant about this collection…): a chat in its own window that can search the whole library and make changes: file items in collections, add or remove tags, add notes, create or rename collections, edit fields, trash and restore. Every change is first run as a dry run and shown as a card, with the item and collection keys resolved to titles and paths; it runs only when you click **Approve**. **Reject** tells the model you declined; **Stop** cancels the turn and any waiting change (a change you already approved stays, and the model remembers it). It can't add files from disk or retrieve metadata from zotero.org.
 
 **Actions:**
 
@@ -102,6 +102,7 @@ Nothing changes until you click; the change runs through the same tools as the M
 - **Local proxies only:** `ANTHROPIC_BASE_URL` must be `127.0.0.1`, `localhost` or `[::1]`; anything else is refused.
 - **No stored secret:** the file is read on every request, so a rotated token or changed model takes effect at once; the plugin keeps no copy.
 - **Models:** tested with Claude (`claude-haiku-5-5`) and Z.ai through an Anthropic-format proxy (`glm-4.5-air`, `glm-4.7`, `glm-5.3`). Models that answer in text instead of calling the proposal tool may reply with the same JSON object; anything else is reported as an error.
+- **Saved conversations:** each chat is saved as a JSON file in `aiops-zotero-mcp/chats/` inside your Zotero data directory, after every turn. They hold your questions, the replies and what the tools returned (so excerpts of your library), stay on this computer, and aren't synced. **New chat** deletes that conversation's file; deleting the folder clears them all.
 - **What leaves Zotero:** the item's metadata and the start of its full text, sent to the proxy you configured; for tag and collection suggestions also your tag names and collection paths; in the chats, whatever their tools return (more of the text, annotations, notes, search results, change previews).
 
 ## Security model

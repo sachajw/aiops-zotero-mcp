@@ -6,14 +6,16 @@
 import { type AgentEvent, type PendingWrite, runAgent, trimHistory } from "../assistant/agent.js";
 import type { ContentBlock, MessageParam } from "../assistant/anthropic.js";
 import { chatSystem, keysIn, librarySystem } from "../assistant/chat.js";
+import { type ViewEntry, parseStoredChat, serializeChat, storeFileName } from "../assistant/store.js";
 import { resolveModel } from "../assistant/config.js";
 import { agentTools } from "../assistant/toolset.js";
 import { CancelledError, send } from "../assistant/transport.js";
-import { actionSettings, describeKey, itemContext, numberPref, stringPref, transportDeps } from "../assistant/zotero.js";
+import { actionSettings, chatStore, describeKey, itemContext, numberPref, stringPref, transportDeps } from "../assistant/zotero.js";
 import type { ToolDefinition } from "../mcp/tool.js";
 import { readTools } from "../tools/read.js";
 import { writeTools } from "../tools/write.js";
 import { backendPicker, button, el } from "./dom.js";
+import { renderMarkdown } from "./markdown.js";
 
 /** Conversation size kept below this many characters, trimming old tool output first. */
 const HISTORY_CHARS = 300_000;
@@ -30,10 +32,6 @@ export interface ChatConfig {
   /** The library whose keys the approval card resolves. */
   libraryID: number;
 }
-
-type ViewEntry =
-  | { role: "user"; text: string }
-  | { role: "assistant"; text: string; tools: string[]; note?: string; error?: boolean };
 
 interface Pending {
   write: PendingWrite;
@@ -52,6 +50,8 @@ interface Chat {
   cancel?: () => void;
   pending?: Pending;
   draft: string;
+  /** True until the saved conversation (if any) has been read from disk. */
+  loading: boolean;
 }
 
 interface Mount {
@@ -70,15 +70,46 @@ const mounts = new Map<HTMLElement, Mount>();
 function chatFor(key: string): Chat {
   let chat = chats.get(key);
   if (!chat) {
-    chat = { messages: [], view: [], running: false, cancelled: false, draft: "" };
-    chats.set(key, chat);
+    const created: Chat = { messages: [], view: [], running: false, cancelled: false, draft: "", loading: true };
+    chats.set(key, created);
+    void restore(key, created);
+    chat = created;
   }
   return chat;
 }
 
+/** Read a saved conversation into a fresh chat, unless the user already started typing in it. */
+async function restore(key: string, chat: Chat): Promise<void> {
+  const name = storeFileName(key);
+  try {
+    const json = name ? await chatStore.read(name) : undefined;
+    const saved = json ? parseStoredChat(json) : undefined;
+    if (saved && chats.get(key) === chat && !chat.running && !chat.view.length) {
+      chat.messages = saved.messages;
+      chat.view = saved.view;
+      chat.backend = saved.backend;
+    }
+  } catch (e) {
+    Zotero.logError(e);
+  } finally {
+    chat.loading = false;
+    if (chats.get(key) === chat) refresh(key);
+  }
+}
+
+async function save(key: string, chat: Chat): Promise<void> {
+  const name = storeFileName(key);
+  if (!name) return;
+  try {
+    await chatStore.write(name, serializeChat({ backend: chat.backend, messages: trimHistory(chat.messages, HISTORY_CHARS), view: chat.view }));
+  } catch (e) {
+    Zotero.logError(e);
+  }
+}
+
 export function itemChatConfig(item: ZoteroAPI.Item): ChatConfig {
   return {
-    key: `item:${item.id}`,
+    key: `item:${item.libraryID}:${item.key}`,
     writes: false,
     libraryID: item.libraryID,
     placeholder: "Ask about this item (Enter to send, Shift+Enter for a new line)",
@@ -151,7 +182,7 @@ function renderLog(mount: Mount, chat: Chat): void {
     } else {
       box.append(el(doc, "div", "Assistant", "font-weight: 600;"));
       for (const t of entry.tools) box.append(el(doc, "div", `${t}…`, "opacity: 0.6; font-size: 0.9em;"));
-      if (entry.text) box.append(el(doc, "div", entry.text, "white-space: pre-wrap; user-select: text;"));
+      if (entry.text) box.append(renderMarkdown(doc, entry.text));
       else if (chat.running && entry === chat.view.at(-1) && !chat.pending) box.append(el(doc, "div", "…", "opacity: 0.6;"));
       if (entry.note) {
         box.append(el(doc, "div", entry.note, entry.error ? "color: var(--accent-red, #c00); white-space: pre-wrap;" : "opacity: 0.6; font-size: 0.9em;"));
@@ -161,7 +192,7 @@ function renderLog(mount: Mount, chat: Chat): void {
   }
   if (chat.pending) log.append(approvalCard(mount, chat, chat.pending));
   if (atBottom) log.scrollTop = log.scrollHeight;
-  mount.send.disabled = chat.running;
+  mount.send.disabled = chat.running || chat.loading;
   mount.stop.disabled = !chat.running;
   mount.newChat.disabled = chat.running || !chat.view.length;
 }
@@ -191,7 +222,9 @@ export function mountChat(container: HTMLElement, doc: Document, config: ChatCon
     refresh(config.key);
   });
   const newChat = button(doc, "New chat", () => {
-    chats.delete(config.key);
+    chats.set(config.key, { messages: [], view: [], running: false, cancelled: false, draft: "", loading: false });
+    const name = storeFileName(config.key);
+    if (name) void chatStore.remove(name).catch((e: unknown) => Zotero.logError(e));
     refresh(config.key);
   });
   input.addEventListener("input", () => {
@@ -247,7 +280,7 @@ function withoutThinking(messages: MessageParam[]): MessageParam[] {
 async function ask(config: ChatConfig, input: HTMLTextAreaElement): Promise<void> {
   const chat = chatFor(config.key);
   const question = input.value.trim();
-  if (!question || chat.running) return;
+  if (!question || chat.running || chat.loading) return;
   input.value = "";
   chat.draft = "";
 
@@ -310,18 +343,25 @@ async function ask(config: ChatConfig, input: HTMLTextAreaElement): Promise<void
       },
       isCancelled: () => chat.cancelled,
     });
-    if (outcome.stopped === "cancelled") throw new CancelledError();
+    if (outcome.stopped === "cancelled") {
+      // Keep what ran (an approved change stays, so the model knows about it); drop a turn where nothing did.
+      if (outcome.kept) chat.messages = outcome.messages;
+      throw new CancelledError();
+    }
     chat.messages = outcome.messages;
     entry.note = `${model} via ${settings.backend.label}` + (outcome.stopped === "max_iterations" ? " (stopped at the tool-use limit)" : "");
     if (!outcome.text && !entry.text) entry.text = "(No answer.)";
   } catch (error) {
-    chat.messages = before; // the unanswered question isn't kept, so the next one starts cleanly
+    if (!(error instanceof CancelledError && chat.messages !== before)) {
+      chat.messages = before; // a turn that changed nothing isn't kept, so the next one starts cleanly
+    }
     if (error instanceof CancelledError) entry.note = "Stopped.";
     else {
       entry.note = error instanceof Error ? error.message : String(error);
       entry.error = true;
     }
   } finally {
+    void save(config.key, chat);
     chat.running = false;
     chat.cancel = undefined;
     chat.pending = undefined;
