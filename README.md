@@ -10,6 +10,8 @@ An MCP server that runs **inside Zotero** as a plugin, so AI agents (Claude Code
 
 Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 
+**Only a Claude subscription, no API key?** Use the plugin's tools from the Claude desktop app: [docs/usage.md → Claude desktop app](docs/usage.md#claude-desktop-app-uses-your-claude-subscription).
+
 **Using it:** see [docs/usage.md](docs/usage.md) for connecting an agent, what to ask, dry runs, the full tool reference and troubleshooting.
 
 ## Tools

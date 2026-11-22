@@ -34,6 +34,42 @@ Keep the single quotes: `${ZOTERO_MCP_TOKEN}` is stored as a reference and fille
 
 If you manage MCP servers with CCS on-demand groups, the group is `zotero` (`mcp-zotero` adds it).
 
+### Claude desktop app (uses your Claude subscription)
+
+If you have a Claude subscription (Pro, Max, Team) and no API key, use the Claude desktop app: it runs on your subscription and can use this plugin's tools. Claude Desktop starts local MCP servers as programs, so it reaches the plugin through a small bridge, [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), which needs [Node.js](https://nodejs.org).
+
+1. Put the token in a file only you can read, so it isn't in Claude's config or the process list (macOS/Linux):
+
+   ```bash
+   mkdir -p ~/.config/aiops-zotero-mcp
+   umask 077
+   printf 'Authorization: Bearer %s\n' 'PASTE-YOUR-TOKEN' > ~/.config/aiops-zotero-mcp/headers.txt
+   ```
+
+2. In Claude Desktop → Settings → Developer → **Edit Config**, add the server to `claude_desktop_config.json` (use your own home path; the file must be an absolute path):
+
+   ```json
+   {
+     "mcpServers": {
+       "zotero": {
+         "command": "npx",
+         "args": [
+           "-y", "mcp-remote@0.16.7",
+           "http://127.0.0.1:23119/aiops-mcp",
+           "--transport", "http-only",
+           "--header-file", "/Users/you/.config/aiops-zotero-mcp/headers.txt"
+         ]
+       }
+     }
+   }
+   ```
+
+3. Restart Claude Desktop. The Zotero tools appear in a chat's tools menu; Zotero must be running.
+
+This gives you the plugin's tools from Claude Desktop (search, read, cite, organise, with dry runs), not the in-Zotero Assistant panel, which needs an API key or a gateway (README → Assistant). Tested by running the bridge exactly as configured above against Zotero 10.0.9 (initialize, all tools listed, a tool call answered); not tested inside Claude Desktop itself.
+
+**ChatGPT:** ChatGPT's connectors reach MCP servers from OpenAI's servers, so they'd need your Zotero exposed to the internet. This plugin is built to stay on 127.0.0.1, so ChatGPT isn't supported.
+
 ### Any other MCP client
 
 | Setting | Value |
