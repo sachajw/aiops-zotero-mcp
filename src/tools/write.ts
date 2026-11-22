@@ -536,6 +536,59 @@ export const setTags = defineTool({
 
 // ---------------------------------------------------------------------- notes
 
+// -------------------------------------------------------------- related items
+
+export const setRelated = defineTool({
+  name: "zotero_set_related",
+  title: "Link or unlink related items",
+  description:
+    "Add items to, or remove them from, an item's Related section (Zotero's links between items, e.g. a book and its review). " +
+    "Links go both ways, as when you use Zotero's Related box, and items must be in the same library.",
+  input: z.object({
+    item_key: zKey,
+    add: z.array(zKey).max(50).default([]).describe("Keys of items to link to item_key."),
+    remove: z.array(zKey).max(50).default([]).describe("Keys of items to unlink from item_key."),
+    dry_run: zDryRun,
+    library_id: zLibraryID,
+  }),
+  annotations: WRITE_IDEMPOTENT,
+  async run(args) {
+    const libraryID = libraryOf(args.library_id, { write: true });
+    if (!args.add.length && !args.remove.length) throw new ToolError("Nothing to change: give add and/or remove");
+    const overlap = args.add.filter((k) => args.remove.includes(k));
+    if (overlap.length) throw new ToolError(`In both add and remove: ${overlap.join(", ")}`);
+    if ([...args.add, ...args.remove].includes(args.item_key)) throw new ToolError("An item can't be related to itself");
+    const item = getItem(libraryID, args.item_key);
+    if (item.isAnnotation()) throw new ToolError(`${item.key} is an annotation; annotations have no related items`);
+    const toAdd = args.add.map((k) => getItem(libraryID, k));
+    const toRemove = args.remove.map((k) => getItem(libraryID, k));
+    const current = new Set(item.relatedItems);
+    const adding = toAdd.filter((o) => !current.has(o.key));
+    const removing = toRemove.filter((o) => current.has(o.key));
+    const label = (o: ZoteroAPI.Item) => `${o.key} ${o.getDisplayTitle()}`;
+    const plan = {
+      item: label(item),
+      add: adding.map(label),
+      remove: removing.map(label),
+      unchanged: [...toAdd.filter((o) => current.has(o.key)), ...toRemove.filter((o) => !current.has(o.key))].map((o) => o.key),
+    };
+    if (!adding.length && !removing.length) return { summary: `Nothing to change: ${item.key}'s related items are already as asked`, data: plan };
+    if (args.dry_run) return dryRunResult(`Would change ${item.key}'s related items`, plan);
+    // As Zotero's Related box does: both directions, one undo step, without touching "Date Modified".
+    await undoable({ action: adding.length ? "undo-action-add-related" : "undo-action-remove-related" }, async () => {
+      for (const other of adding) {
+        if (item.addRelatedItem(other)) await item.save({ skipDateModifiedUpdate: true });
+        if (other.addRelatedItem(item)) await other.save({ skipDateModifiedUpdate: true });
+      }
+      for (const other of removing) {
+        if (await item.removeRelatedItem(other)) await item.save({ skipDateModifiedUpdate: true });
+        if (await other.removeRelatedItem(item)) await other.save({ skipDateModifiedUpdate: true });
+      }
+    });
+    return { summary: `Updated ${item.key}'s related items (${adding.length} linked, ${removing.length} unlinked)`, data: plan };
+  },
+});
+
 export const addNote = defineTool({
   name: "zotero_add_note",
   title: "Add note",
@@ -665,6 +718,7 @@ export const writeTools = [
   renameAttachment,
   setCollections,
   setTags,
+  setRelated,
   addNote,
   trashItems,
   restoreItems,

@@ -24,7 +24,7 @@ Tested on Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x. MIT lic
 - **Localhost only:** the MCP server is an endpoint on Zotero's built-in server, `http://127.0.0.1:23119/aiops-mcp`. The plugin opens no socket of its own.
 - **Token required:** every MCP request needs `Authorization: Bearer <token>`; with no token set, it refuses everything (503).
 - **Preview first:** every change takes `dry_run: true`. The Assistant only changes your library when you click, through the same tools.
-- **Undo:** on Zotero 10, changes to existing items and collections can be reversed with **Edit → Undo**, labelled as Zotero labels the same change made by hand; a batch is one step.
+- **Undo:** on Zotero 10, changes to existing items and collections (including related-item links) can be reversed with **Edit → Undo**, labelled as Zotero labels the same change made by hand; a batch is one step.
 - **Nothing is deleted permanently:** removal is trash only, undone by the restore tools; libraries without a trash are refused.
 
 ## Tools
@@ -33,7 +33,7 @@ Tested on Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x. MIT lic
 |---|---|
 | `zotero_list_libraries` | My Library and groups, with IDs and whether they're editable |
 | `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type, or items in no collection (`unfiled`); paged in a stable order (by item ID) |
-| `zotero_get_item` | All fields, creators, tags, collections, attachments (and whether each file exists), notes |
+| `zotero_get_item` | All fields, creators, tags, collections, related items, attachments (and whether each file exists), notes |
 | `zotero_list_collections` | Collections with keys, full paths and counts; find one by `name` at any depth |
 | `zotero_get_attachment` | One attachment's file details |
 | `zotero_get_fulltext` | Text of a PDF/EPUB/snapshot/text attachment, in pages; attachments with a missing file are skipped |
@@ -47,6 +47,7 @@ Tested on Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x. MIT lic
 | `zotero_retrieve_metadata` | Zotero's "Retrieve Metadata for PDF" on standalone PDFs/EPUBs: creates the parent item, reports misses, and returns anything still running after a bounded wait as `pending` (or `failed` if Zotero's run errored) |
 | `zotero_rename_attachment` | Title and/or file name; never overwrites |
 | `zotero_set_collections` / `zotero_set_tags` | Add/remove collections or tags on many items, all or nothing |
+| `zotero_set_related` | Link or unlink items in Zotero's Related section, both ways, as Zotero's Related box does |
 | `zotero_add_note` | Child or standalone note, from plain text or HTML |
 | `zotero_trash_items` / `zotero_restore_items` | Items (with their children) to/from the trash |
 
@@ -86,10 +87,11 @@ The **Assistant** section (sparkle icon in the item pane, also in the PDF reader
 | Summarise | A short summary from the metadata and the start of the full text. **Save as note** adds it as a child note, with a footer naming the model, backend, date and how much of the text was read. |
 | Suggest tags | Up to 8 tags, matched to your library's existing tags (same spelling). Tags the model made up are listed as "(new tag)" and left unticked. |
 | Suggest collection | Up to 3 existing collections by path, with a reason each. |
+| Suggest related | Up to 5 items to link in the Related section, chosen from items in the same collections, with the same tags or similar titles, each with a reason; none ticked until you choose. |
 
-Nothing changes until you click **Save as note**, **Add selected tags** or **Add to selected**.
+Nothing changes until you click **Save as note**, **Add selected tags**, **Add to selected** or **Link selected**.
 
-**Library assistant** (also: right-click a collection → *Ask the library assistant about this collection…*): searches the whole library and makes changes: files items, adds or removes tags, adds notes, creates or renames collections, edits fields, trashes and restores. Each change is first run as a dry run and shown as a card, with keys resolved to titles and collection paths; it runs only when you click **Approve**. **Reject** tells the model you declined; **Stop** cancels the turn and any waiting change (a change you already approved stays, and the model remembers it). It can't add files from disk or retrieve metadata from zotero.org.
+**Library assistant** (also: right-click a collection → *Ask the library assistant about this collection…*): searches the whole library and makes changes: files items, adds or removes tags, links related items, adds notes, creates or renames collections, edits fields, trashes and restores. Each change is first run as a dry run and shown as a card, with keys resolved to titles and collection paths; it runs only when you click **Approve**. **Reject** tells the model you declined; **Stop** cancels the turn and any waiting change (a change you already approved stays, and the model remembers it). It can't add files from disk or retrieve metadata from zotero.org.
 
 ### Set up
 

@@ -62,7 +62,13 @@ declare namespace ZoteroAPI {
     annotationPageLabel?: string;
     saveTx(): Promise<number | boolean>;
     /** Save inside the caller's Zotero.DB.executeTransaction. */
-    save(): Promise<number | boolean>;
+    save(options?: { skipDateModifiedUpdate?: boolean }): Promise<number | boolean>;
+    /** Keys of the items in this item's Related section (same library). */
+    readonly relatedItems: string[];
+    /** Links this item to another, one direction; false if already linked. Save afterwards. */
+    addRelatedItem(item: Item): boolean;
+    /** Unlinks, one direction; resolves false if they weren't linked. Save afterwards. */
+    removeRelatedItem(item: Item): Promise<boolean>;
     toJSON(options?: { mode?: "full" }): Record<string, unknown>;
   }
 

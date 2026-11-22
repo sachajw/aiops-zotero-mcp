@@ -8,11 +8,15 @@
  */
 import {
   type CollectionSuggestion,
+  type RelatedCandidate,
+  type RelatedSuggestion,
   type TagProposal,
   collectionsRequest,
   parseCollectionProposal,
+  parseRelatedProposal,
   parseSummary,
   parseTagProposal,
+  relatedRequest,
   summaryNote,
   summaryRequest,
   tagsRequest,
@@ -24,6 +28,7 @@ import {
   collectionKeysOf,
   itemContext,
   libraryTags,
+  relatedCandidates,
   listBackends,
   providers,
   removeBackend,
@@ -39,7 +44,7 @@ import { itemChatConfig, mountChat, stopAllChats, unmountChat, watchDeletions } 
 import { backendSummary, button, checkbox, el } from "./dom.js";
 import { closeLibraryAssistant, openLibraryAssistant } from "./window.js";
 
-type ActionKind = "summary" | "tags" | "collections";
+type ActionKind = "summary" | "tags" | "collections" | "related";
 
 type PaneState =
   | { status: "running"; kind: ActionKind; label: string; cancel?: () => void }
@@ -47,6 +52,7 @@ type PaneState =
   | { status: "summary"; note: string; model: string; backend: string }
   | { status: "tags"; proposal: TagProposal; model: string; backend: string }
   | { status: "collections"; suggestions: CollectionSuggestion[]; model: string; backend: string }
+  | { status: "related"; suggestions: RelatedSuggestion[]; model: string; backend: string }
   | { status: "applying"; message: string }
   | { status: "done"; message: string };
 
@@ -78,6 +84,7 @@ const RUNNING_LABEL: Record<ActionKind, string> = {
   summary: "Summarising",
   tags: "Suggesting tags",
   collections: "Suggesting collections",
+  related: "Looking for related items",
 };
 
 export async function runAction(item: ZoteroAPI.Item, kind: ActionKind): Promise<void> {
@@ -88,12 +95,19 @@ export async function runAction(item: ZoteroAPI.Item, kind: ActionKind): Promise
     const where = `${settings.model} via ${settings.backend.label}`;
     setState(item.id, { status: "running", kind, label: `${RUNNING_LABEL[kind]} with ${where}…` });
     const ctx = await itemContext(item, settings.contextChars);
+    let candidates: RelatedCandidate[] = [];
     const request =
       kind === "summary"
         ? summaryRequest(ctx, settings.model, settings.maxTokens)
         : kind === "tags"
           ? tagsRequest(ctx, await libraryTags(item.libraryID), settings.model, settings.maxTokens)
-          : collectionsRequest(ctx, collectionChoices(item.libraryID), settings.model, settings.maxTokens);
+          : kind === "collections"
+            ? collectionsRequest(ctx, collectionChoices(item.libraryID), settings.model, settings.maxTokens)
+            : relatedRequest(ctx, (candidates = await relatedCandidates(item)), settings.model, settings.maxTokens);
+    if (kind === "related" && !candidates.length) {
+      setState(item.id, { status: "related", suggestions: [], model: settings.model, backend: settings.backend.label });
+      return;
+    }
     const message = await send(transportDeps(), settings.backend, request, {
       timeoutSeconds: settings.timeoutSeconds,
       onCancel: (cancel) => {
@@ -108,9 +122,12 @@ export async function runAction(item: ZoteroAPI.Item, kind: ActionKind): Promise
     } else if (kind === "tags") {
       const proposal = parseTagProposal(message, await libraryTags(item.libraryID), ctx.tags);
       setState(item.id, { status: "tags", proposal, ...meta });
-    } else {
+    } else if (kind === "collections") {
       const suggestions = parseCollectionProposal(message, collectionChoices(item.libraryID), collectionKeysOf(item));
       setState(item.id, { status: "collections", suggestions, ...meta });
+    } else {
+      const suggestions = parseRelatedProposal(message, candidates, [item.key, ...item.relatedItems]);
+      setState(item.id, { status: "related", suggestions, ...meta });
     }
   } catch (error) {
     if (error instanceof CancelledError) {
@@ -164,6 +181,7 @@ function render(body: HTMLElement, doc: Document, itemID: number): void {
     button(doc, "Summarise", () => void runAction(item, "summary"), busy),
     button(doc, "Suggest tags", () => void runAction(item, "tags"), busy),
     button(doc, "Suggest collection", () => void runAction(item, "collections"), busy || !item.isTopLevelItem()),
+    button(doc, "Suggest related", () => void runAction(item, "related"), busy || !item.isRegularItem()),
   );
   area.append(actions);
   if (!state) {
@@ -237,6 +255,23 @@ function render(body: HTMLElement, doc: Document, itemID: number): void {
       );
       break;
     }
+    case "related": {
+      panel.append(by(state));
+      if (!state.suggestions.length) {
+        panel.append(el(doc, "div", "No related items found among the candidates (items in the same collections, with the same tags, or with similar titles)."), discard());
+        break;
+      }
+      const boxes = state.suggestions.map((s) => ({ key: s.key, ...checkbox(doc, s.title, false, s.reason ? `: ${s.reason}` : "") }));
+      boxes.forEach((b) => panel.append(b.row));
+      panel.append(
+        button(doc, "Link selected", () => {
+          const add = boxes.filter((b) => b.input.checked).map((b) => b.key);
+          if (add.length) void apply(itemID, "zotero_set_related", { item_key: item.key, add, library_id: item.libraryID }, `Linked ${add.length} related item(s).`);
+        }),
+        discard(),
+      );
+      break;
+    }
   }
 }
 
@@ -257,7 +292,12 @@ function menuItem(l10nID: string, kind: ActionKind): ZoteroUI.MenuData {
     l10nID,
     onShowing: (_event, ctx) => {
       const items = ctx.items ?? [];
-      ctx.setEnabled(items.length === 1 && eligible(items[0]) && (kind !== "collections" || items[0].isTopLevelItem()));
+      ctx.setEnabled(
+        items.length === 1 &&
+          eligible(items[0]) &&
+          (kind !== "collections" || items[0].isTopLevelItem()) &&
+          (kind !== "related" || items[0].isRegularItem()),
+      );
     },
     onCommand: (_event, ctx) => {
       const item = ctx.items?.[0];
@@ -315,6 +355,7 @@ export function registerAssistant(pluginID: string, rootURI: string): void {
           menuItem("aiops-assistant-summarise", "summary"),
           menuItem("aiops-assistant-suggest-tags", "tags"),
           menuItem("aiops-assistant-suggest-collections", "collections"),
+          menuItem("aiops-assistant-suggest-related", "related"),
         ],
       },
     ],

@@ -97,6 +97,8 @@ export async function itemDetail(item: ZoteroAPI.Item): Promise<Record<string, u
     key: item.key,
     libraryID: item.libraryID,
     collectionKeys: collectionKeysOf(item),
+    // Zotero's "Related" links, as keys with titles (the raw relations URIs are left out).
+    related: relatedView(item),
     inTrash: item.deleted,
   };
   delete detail.collections;
@@ -110,6 +112,14 @@ export async function itemDetail(item: ZoteroAPI.Item): Promise<Record<string, u
     Object.assign(detail, await attachmentView(item));
   }
   return detail;
+}
+
+/** An item's related items (Zotero's Related section): key and title, skipping any that no longer exist. */
+export function relatedView(item: ZoteroAPI.Item): Array<{ key: string; title: string }> {
+  return item.relatedItems.flatMap((key) => {
+    const other = Zotero.Items.getByLibraryAndKey(item.libraryID, key);
+    return other ? [{ key, title: other.getDisplayTitle() }] : [];
+  });
 }
 
 /** Collection keys for an item, resolved from its collection IDs. */

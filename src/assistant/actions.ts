@@ -250,3 +250,88 @@ export function parseCollectionProposal(message: Message, collections: Collectio
   }
   return out;
 }
+
+// ------------------------------------------------------------ related items
+
+export interface RelatedCandidate {
+  key: string;
+  title: string;
+  /** Why it's a candidate, e.g. "same collection: Cloud Native; tag: Kubernetes". */
+  why: string;
+}
+
+export const MAX_RELATED_CANDIDATES = 150;
+export const MAX_RELATED_SUGGESTIONS = 5;
+
+export const PROPOSE_RELATED: ToolParam = {
+  name: "propose_related",
+  description: "Propose items from the candidate list that are genuinely related to the item, by key, best first.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["suggestions"],
+    properties: {
+      suggestions: {
+        type: "array",
+        maxItems: MAX_RELATED_SUGGESTIONS,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["key", "reason"],
+          properties: {
+            key: { type: "string", description: "Item key from the candidate list" },
+            reason: { type: "string", description: "One short sentence: how they're related" },
+          },
+        },
+      },
+    },
+  },
+};
+
+export function relatedRequest(ctx: ItemContext, candidates: RelatedCandidate[], model: string, maxTokens: number): MessagesRequest {
+  const list = candidates.slice(0, MAX_RELATED_CANDIDATES).map((c) => `${c.key}\t${c.title}\t(${c.why})`).join("\n");
+  return {
+    model,
+    max_tokens: maxTokens,
+    system:
+      `You link related items in a personal reference library. From the candidates, pick up to ${MAX_RELATED_SUGGESTIONS} that are genuinely related ` +
+      "to the item: the same work in another form, a direct companion (a review, a sequel, an edition, a cheat sheet for the same tool), " +
+      "or substantially the same specific topic. Sharing a broad collection or tag alone isn't enough. Fewer good links are better than many weak ones; " +
+      "an empty list is a fine answer. " +
+      answerWith(PROPOSE_RELATED, '{"suggestions": [{"key": "ABCD2345", "reason": "Second edition of the same book."}]}') + " " +
+      UNTRUSTED,
+    messages: [{ role: "user", content: `Candidates (key, title, why listed):\n${list}\n\nThe item:\n${describeItem(ctx)}` }],
+    tools: [PROPOSE_RELATED],
+    tool_choice: { type: "tool", name: PROPOSE_RELATED.name },
+  };
+}
+
+export interface RelatedSuggestion extends RelatedCandidate {
+  reason: string;
+}
+
+/** Keep only candidates (not the item or its existing related items), at most 5, in the model's order. */
+export function parseRelatedProposal(message: Message, candidates: RelatedCandidate[], exclude: string[]): RelatedSuggestion[] {
+  const input = proposalInput(message, PROPOSE_RELATED);
+  if (!input) throw new Error("The model didn't return a related-items proposal");
+  const raw = Array.isArray(input.suggestions) ? input.suggestions : [];
+  const byKey = new Map(candidates.map((c) => [c.key, c]));
+  const skip = new Set(exclude);
+  const out: RelatedSuggestion[] = [];
+  for (const s of raw) {
+    if (!s || typeof s !== "object") continue;
+    const { key, reason } = s as { key?: unknown; reason?: unknown };
+    const found = typeof key === "string" ? byKey.get(key.trim()) : undefined;
+    if (!found || skip.has(found.key) || out.some((o) => o.key === found.key)) continue;
+    out.push({ ...found, reason: typeof reason === "string" ? reason.trim() : "" });
+    if (out.length >= MAX_RELATED_SUGGESTIONS) break;
+  }
+  return out;
+}
+
+/** Distinctive words of a title, for finding candidates by title. */
+export function titleWords(title: string, max = 4): string[] {
+  const stop = new Set(["about", "after", "their", "there", "these", "those", "which", "where", "while", "with", "from", "into", "your", "guide", "introduction", "edition", "using", "learning", "practical", "complete", "second", "third"]);
+  const words = title.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}+#.-]{3,}/gu) ?? [];
+  return [...new Set(words.filter((w) => !stop.has(w)))].sort((a, b) => b.length - a.length).slice(0, max);
+}

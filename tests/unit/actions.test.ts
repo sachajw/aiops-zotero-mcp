@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ItemContext, collectionsRequest, describeItem, parseCollectionProposal, parseSummary, parseTagProposal, summaryNote, summaryRequest, tagsRequest } from "../../src/assistant/actions.js";
+import { type ItemContext, collectionsRequest, parseRelatedProposal, relatedRequest, titleWords, describeItem, parseCollectionProposal, parseSummary, parseTagProposal, summaryNote, summaryRequest, tagsRequest } from "../../src/assistant/actions.js";
 import type { Message } from "../../src/assistant/anthropic.js";
 
 const ctx: ItemContext = {
@@ -83,5 +83,35 @@ describe("collection suggestions", () => {
       { key: "BBBB2222", path: "Platform Engineering / Cloud Native / Orchestrator / K8s", reason: "It's about Kubernetes." },
       { key: "CCCC2222", path: "Library / Brew", reason: "" },
     ]);
+  });
+});
+
+describe("related items", () => {
+  const candidates = [
+    { key: "AAAA2222", title: "Kubernetes Patterns, 2nd edition", why: "title word: kubernetes" },
+    { key: "BBBB2222", title: "Brewing Classic Styles", why: "tag: Books" },
+  ];
+  const toolMessage2 = (input: Record<string, unknown>): Message => ({ content: [{ type: "tool_use", id: "t", name: "propose_related", input }], stop_reason: "tool_use" });
+
+  it("lists candidates with why they're listed, and forces the proposal tool", () => {
+    const req = relatedRequest(ctx, candidates, "m", 1000);
+    expect(req.messages[0].content).toContain("AAAA2222\tKubernetes Patterns, 2nd edition\t(title word: kubernetes)");
+    expect(req.tool_choice).toEqual({ type: "tool", name: "propose_related" });
+  });
+
+  it("keeps only candidates, never the item or ones already related, in order", () => {
+    const m = toolMessage2({ suggestions: [
+      { key: "ZZZZ2222", reason: "made up" },
+      { key: "AAAA2222", reason: "Second edition." },
+      { key: "ABCD2345", reason: "itself" },
+      { key: "AAAA2222", reason: "dup" },
+    ] });
+    expect(parseRelatedProposal(m, candidates, ["ABCD2345"])).toEqual([{ ...candidates[0], reason: "Second edition." }]);
+    expect(parseRelatedProposal(m, candidates, ["ABCD2345", "AAAA2222"])).toEqual([]);
+  });
+
+  it("picks distinctive title words", () => {
+    expect(titleWords("Kubernetes Patterns: Reusable Elements for Designing Cloud-Native Applications")).toEqual(["cloud-native", "applications", "kubernetes", "designing"]);
+    expect(titleWords("A Guide to Go")).toEqual([]);
   });
 });

@@ -200,6 +200,7 @@ Required parameters are marked \*. Defaults in brackets. Every tool also takes `
 | `zotero_rename_attachment` | `item_key`\*, `title`, `filename` (extension kept if omitted; never overwrites; if the file is renamed but the title save fails, the error says so) |
 | `zotero_set_collections` | `item_keys`\*, `add` [], `remove` [] |
 | `zotero_set_tags` | `item_keys`\*, `add` [], `remove` [] |
+| `zotero_set_related` | `item_key`\*, `add` [], `remove` [] (keys of items to link or unlink; both ways, same library) |
 | `zotero_add_note` | `text`\*, `format` [`text`] \| `html`, `parent_item_key`, `collection_keys` |
 | `zotero_trash_items` | `item_keys`\* |
 | `zotero_restore_items` | `item_keys`\* |

@@ -5,7 +5,7 @@
  */
 import { getFulltext } from "../tools/read.js";
 import { collectionPath, itemSummary } from "../zotero/library.js";
-import type { CollectionChoice, ItemContext } from "./actions.js";
+import type { CollectionChoice, ItemContext, RelatedCandidate } from "./actions.js";
 import {
   ACTIVE_PROFILE_PREF,
   BACKENDS_PREF,
@@ -238,3 +238,40 @@ export const chatStore = {
     await IOUtils.remove(PathUtils.join(this.dir(), name), { ignoreAbsent: true });
   },
 };
+
+/**
+ * Candidates for "Suggest related items": regular items in the same collections, sharing a tag, or
+ * matching the title's distinctive words; not the item itself or anything already related. Items
+ * matching more of these come first.
+ */
+export async function relatedCandidates(item: ZoteroAPI.Item): Promise<RelatedCandidate[]> {
+  const { titleWords, MAX_RELATED_CANDIDATES } = await import("./actions.js");
+  const reasons = new Map<number, string[]>();
+  const note = (id: number, why: string) => {
+    if (id === item.id) return;
+    const list = reasons.get(id) ?? [];
+    if (!list.includes(why)) list.push(why);
+    reasons.set(id, list);
+  };
+  for (const collectionID of item.getCollections()) {
+    const c = Zotero.Collections.get(collectionID);
+    if (!c) continue;
+    for (const other of c.getChildItems()) if (other.isRegularItem()) note(other.id, `same collection: ${c.name}`);
+  }
+  const search = async (condition: string, value: string, why: string) => {
+    const s = new Zotero.Search();
+    s.libraryID = item.libraryID;
+    s.addCondition(condition, condition === "tag" ? "is" : "contains", value);
+    s.addCondition("noChildren", "true");
+    for (const id of (await s.search()).slice(0, 60)) note(id, why);
+  };
+  for (const { tag } of item.getTags().slice(0, 10)) await search("tag", tag, `tag: ${tag}`);
+  for (const word of titleWords(item.getDisplayTitle())) await search("quicksearch-titleCreatorYear", word, `title word: ${word}`);
+  const related = new Set(item.relatedItems);
+  const ranked = [...reasons].sort((a, b) => b[1].length - a[1].length).slice(0, MAX_RELATED_CANDIDATES * 2);
+  const items = await Zotero.Items.getAsync(ranked.map(([id]) => id));
+  return items
+    .filter((o) => o.isRegularItem() && !o.deleted && !related.has(o.key))
+    .slice(0, MAX_RELATED_CANDIDATES)
+    .map((o) => ({ key: o.key, title: o.getDisplayTitle(), why: (reasons.get(o.id) ?? []).slice(0, 3).join("; ") }));
+}

@@ -121,7 +121,7 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
     it("lists all tools", async () => {
       const res = await post({ jsonrpc: "2.0", id: 1, method: "tools/list" });
       const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
-      expect(body.result.tools.length).toBe(23);
+      expect(body.result.tools.length).toBe(24);
     });
 
     it("answers 12 parallel calls, each with its own result", async () => {
@@ -199,6 +199,31 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
       created.push(bookKey);
       const item = await ok("zotero_get_item", { item_key: bookKey });
       expect(item.data).toMatchObject({ itemType: "book", title: `Test Book ${stamp}`, collectionKeys: [collectionKey] });
+    });
+
+    it("links and unlinks related items both ways, with a dry run first", async () => {
+      // Not in the test collection: later tests expect it to hold only the book. Trashed at the end with the rest.
+      const r = await ok("zotero_create_item", { item_type: "book", fields: { title: `Companion ${stamp}` } });
+      const otherKey = (r.data as { key: string }).key;
+      created.push(otherKey);
+      const related = async (key: string) => ((await ok("zotero_get_item", { item_key: key })).data as { related: Array<{ key: string }> }).related.map((x) => x.key);
+
+      const dry = await ok("zotero_set_related", { item_key: bookKey, add: [otherKey], dry_run: true });
+      expect(dry.text).toMatch(/^Dry run, nothing changed/);
+      expect(await related(bookKey)).toEqual([]);
+
+      await ok("zotero_set_related", { item_key: bookKey, add: [otherKey] });
+      expect(await related(bookKey)).toEqual([otherKey]);
+      expect(await related(otherKey)).toEqual([bookKey]);
+      const again = await ok("zotero_set_related", { item_key: bookKey, add: [otherKey] });
+      expect(again.text).toMatch(/Nothing to change/);
+
+      const self = await tool("zotero_set_related", { item_key: bookKey, add: [bookKey] });
+      expect(self.isError).toBe(true);
+
+      await ok("zotero_set_related", { item_key: otherKey, remove: [bookKey] });
+      expect(await related(bookKey)).toEqual([]);
+      expect(await related(otherKey)).toEqual([]);
     });
 
     it("updates fields and finds the item by search, tag and collection", async () => {
