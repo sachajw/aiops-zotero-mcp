@@ -5,6 +5,7 @@
  */
 import { handleHttp } from "./http/handler.js";
 import { McpServer } from "./mcp/server.js";
+import { addStrings, registerAssistant, removeStrings, unregisterAssistant } from "./ui/assistant.js";
 import { readTools } from "./tools/read.js";
 import { writeTools } from "./tools/write.js";
 
@@ -20,7 +21,7 @@ let registered = false;
 const REASON_PHRASES: Record<number, string> = { 202: "Accepted", 401: "Unauthorized", 405: "Method Not Allowed" };
 const addedPhrases: number[] = [];
 
-export function start({ version }: { id: string; version: string; rootURI: string }): void {
+export function start({ id, version, rootURI }: { id: string; version: string; rootURI: string }): void {
   const server = new McpServer({
     info: {
       name: "aiops-zotero-mcp",
@@ -57,9 +58,25 @@ export function start({ version }: { id: string; version: string; rootURI: strin
   Zotero.Server.Endpoints[ENDPOINT_PATH] = McpEndpoint;
   registered = true;
   Zotero.debug(`aiops-zotero-mcp ${version}: MCP endpoint at ${ENDPOINT_PATH}`);
+  try {
+    registerAssistant(id, rootURI);
+  } catch (e) {
+    // The MCP endpoint keeps working even if the assistant UI can't register.
+    Zotero.logError(e);
+  }
+}
+
+/** bootstrap.js forwards Zotero's main-window hooks, so windows opened later get the strings too. */
+export function onMainWindowLoad(window: Window & { MozXULElement: { insertFTLIfNeeded(file: string): void } }): void {
+  addStrings(window);
+}
+
+export function onMainWindowUnload(window: Window): void {
+  removeStrings(window);
 }
 
 export function stop(): void {
+  unregisterAssistant();
   if (registered) {
     Reflect.deleteProperty(Zotero.Server.Endpoints, ENDPOINT_PATH);
     for (const code of addedPhrases.splice(0)) Reflect.deleteProperty(Zotero.Server.responseCodes, code);

@@ -12,6 +12,14 @@ async function startup({ id, version, rootURI }) {
   AiopsZoteroMcp.start({ id, version, rootURI });
 }
 
+function onMainWindowLoad({ window }) {
+  AiopsZoteroMcp?.onMainWindowLoad(window);
+}
+
+function onMainWindowUnload({ window }) {
+  AiopsZoteroMcp?.onMainWindowUnload(window);
+}
+
 function shutdown() {
   if (AiopsZoteroMcp) AiopsZoteroMcp.stop();
   AiopsZoteroMcp = undefined;

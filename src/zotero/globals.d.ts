@@ -121,8 +121,61 @@ declare namespace ZoteroAPI {
   }
 }
 
+/** Plugin UI APIs (xpcom/pluginAPI/*, checked in Zotero 10.0.9). Hooks get more than typed here. */
+declare namespace ZoteroUI {
+  interface SectionHookArgs {
+    paneID: string;
+    doc: Document;
+    body: HTMLElement;
+    /** Undefined while nothing is selected. */
+    item: ZoteroAPI.Item | undefined;
+    tabType: string;
+    editable: boolean;
+    setEnabled(enabled: boolean): void;
+    setSectionSummary(summary: string): void;
+  }
+  interface SectionOptions {
+    paneID: string;
+    pluginID: string;
+    header: { l10nID: string; icon: string };
+    sidenav: { l10nID: string; icon: string };
+    onRender(args: SectionHookArgs): void;
+    onItemChange?(args: SectionHookArgs): void;
+    onDestroy?(args: { paneID: string; doc: Document; body: HTMLElement }): void;
+  }
+  interface MenuContext {
+    items?: ZoteroAPI.Item[];
+    setEnabled(enabled: boolean): void;
+    setVisible(visible: boolean): void;
+  }
+  interface MenuData {
+    menuType: "menuitem" | "separator" | "submenu";
+    l10nID?: string;
+    icon?: string;
+    onShowing?(event: Event, context: MenuContext): void;
+    onCommand?(event: Event, context: MenuContext): void;
+    menus?: MenuData[];
+  }
+}
+
 declare const Zotero: {
   version: string;
+  getMainWindow(): (Window & typeof globalThis & {
+    ZoteroPane: { itemPane?: { _itemDetails?: { scrollToPane(paneID: string): void } }; getSelectedItems(): ZoteroAPI.Item[] };
+    MozXULElement: { insertFTLIfNeeded(file: string): void };
+  }) | null;
+  ItemPaneManager: {
+    /** Returns the registered key, or false if the options were refused. */
+    registerSection(options: ZoteroUI.SectionOptions): string | false;
+    unregisterSection(key: string): boolean;
+  };
+  MenuManager: {
+    registerMenu(options: { menuID: string; pluginID: string; target: string; menus: ZoteroUI.MenuData[] }): string | false;
+    unregisterMenu(menuID: string): boolean;
+  };
+  Tags: {
+    getAll(libraryID: number): Promise<Array<{ tag: string; type: number }>>;
+  };
   initializationPromise: Promise<void>;
   debug(message: string, level?: number): void;
   logError(error: unknown): void;
@@ -227,6 +280,7 @@ declare const Zotero: {
 
 declare const IOUtils: {
   exists(path: string): Promise<boolean>;
+  readUTF8(path: string): Promise<string>;
   stat(path: string): Promise<{ type: "regular" | "directory" | "other"; size: number }>;
 };
 

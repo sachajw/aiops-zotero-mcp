@@ -27,6 +27,10 @@ await build({
 for (const f of ["bootstrap.js", "prefs.js"]) cpSync(join(root, "addon", f), join(stage, f));
 // MIT requires the licence notice in every copy, and the .xpi is the copy people install.
 cpSync(join(root, "LICENSE"), join(stage, "LICENSE"));
+// Static assets (icons) go next to the bundle; Fluent strings go where Zotero looks for them
+// ([plugin root]/locale/<lang>/*.ftl, registered automatically).
+cpSync(join(root, "addon", "static"), join(stage, "content"), { recursive: true });
+cpSync(join(root, "addon", "locale"), join(stage, "locale"), { recursive: true });
 const manifest = readFileSync(join(root, "addon", "manifest.json"), "utf8").replace("__VERSION__", version);
 writeFileSync(join(stage, "manifest.json"), manifest);
 

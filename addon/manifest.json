@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "aiops Zotero MCP",
   "version": "__VERSION__",
-  "description": "MCP server inside Zotero for AI agents: localhost only, bearer-token auth",
+  "description": "MCP server inside Zotero for AI agents, plus an in-Zotero assistant (Claude, Z.ai or any local Anthropic-format proxy)",
   "author": "Sacha Wharton",
   "homepage_url": "https://github.com/sachajw/aiops-zotero-mcp",
   "applications": {

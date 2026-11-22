@@ -788,4 +788,4 @@ Errors that the agent can fix come back as a tool result marked as an error, so 
 
 ## 8. Privacy
 
-Everything stays on this computer between your agent and Zotero. What leaves it is whatever the agent itself sends to its model provider, which includes the text of any item, note or PDF it reads. Leave Zotero's debug output logging off in normal use: when on, Zotero logs request headers, including the token.
+Everything stays on this computer between your agent and Zotero. The in-Zotero Assistant (README → Assistant) sends the item's metadata and the start of its full text, plus your tag names and collection paths for suggestions, to the local proxy you configured, which forwards it to that proxy's model provider. What else leaves it is whatever the agent itself sends to its model provider, which includes the text of any item, note or PDF it reads. Leave Zotero's debug output logging off in normal use: when on, Zotero logs request headers, including the token.

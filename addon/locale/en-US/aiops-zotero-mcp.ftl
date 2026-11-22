@@ -1,0 +1,12 @@
+aiops-assistant-header =
+    .label = Assistant
+aiops-assistant-sidenav =
+    .tooltiptext = Assistant
+aiops-assistant-menu =
+    .label = Assistant
+aiops-assistant-summarise =
+    .label = Summarise to note…
+aiops-assistant-suggest-tags =
+    .label = Suggest tags…
+aiops-assistant-suggest-collections =
+    .label = Suggest collection…
