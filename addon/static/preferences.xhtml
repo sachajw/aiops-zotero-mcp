@@ -16,6 +16,8 @@
       <label value="Actions model"/>
       <html:input type="text" id="aiops-llm-action-model" preference="extensions.aiops-zotero-mcp.llm.actionModel"/>
     </hbox>
+    <html:p style="margin-bottom: 0;">Per backend (overrides the two above for that backend only; empty = use them). Tiers map to each settings file's own models, so e.g. "default" is the top model of whichever backend.</html:p>
+    <html:div id="aiops-llm-per-backend"/>
     <hbox align="center">
       <html:button id="aiops-llm-test">Test connection</html:button>
       <label id="aiops-llm-test-result" value=""/>

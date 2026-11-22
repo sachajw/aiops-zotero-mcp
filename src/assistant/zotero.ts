@@ -6,7 +6,7 @@
 import { getFulltext } from "../tools/read.js";
 import { collectionPath, itemSummary } from "../zotero/library.js";
 import type { CollectionChoice, ItemContext } from "./actions.js";
-import { type Backend, PREF_PREFIX, loadBackend, resolveModel } from "./config.js";
+import { type Backend, type ModelUse, PREF_PREFIX, loadBackend, modelChoice, resolveModel } from "./config.js";
 import type { TransportDeps } from "./transport.js";
 
 function pref(name: string): unknown {
@@ -19,9 +19,11 @@ export function numberPref(name: string, fallback: number, min: number, max: num
   return Number.isFinite(n) && n > 0 ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
 }
 
-export function stringPref(name: string, fallback: string): string {
-  const v = pref(`${PREF_PREFIX}${name}`);
-  return typeof v === "string" && v.trim() ? v.trim() : fallback;
+const MODEL_DEFAULTS: Record<ModelUse, string> = { chatModel: "sonnet", actionModel: "haiku" };
+
+/** The model ID for a use on this backend (per-backend pref, shared pref, then default tier). */
+export function modelFor(backend: Backend, use: ModelUse): string {
+  return resolveModel(backend, modelChoice(pref, use, backend.label, MODEL_DEFAULTS[use]));
 }
 
 export interface ActionSettings {
@@ -36,7 +38,7 @@ export async function actionSettings(): Promise<ActionSettings> {
   const backend = await loadBackend({ pref, readFile: (path) => IOUtils.readUTF8(path) });
   return {
     backend,
-    model: resolveModel(backend, stringPref("actionModel", "haiku")),
+    model: modelFor(backend, "actionModel"),
     maxTokens: numberPref("maxTokens", 4096, 256, 32_000),
     contextChars: numberPref("contextChars", 60_000, 1_000, 100_000),
     timeoutSeconds: numberPref("requestTimeoutSeconds", 120, 10, 600),
@@ -104,7 +106,7 @@ export function collectionKeysOf(item: ZoteroAPI.Item): string[] {
 export async function testConnection(): Promise<string> {
   const { send } = await import("./transport.js");
   const settings = await actionSettings();
-  const model = resolveModel(settings.backend, stringPref("chatModel", "sonnet"));
+  const model = modelFor(settings.backend, "chatModel");
   const started = Date.now();
   const reply = await send(transportDeps(), settings.backend, { model, max_tokens: 1024, messages: [{ role: "user", content: "Reply with just: OK" }] }, { timeoutSeconds: settings.timeoutSeconds });
   return `OK: ${reply.model ?? model} via ${settings.backend.label} answered in ${((Date.now() - started) / 1000).toFixed(1)}s.`;

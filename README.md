@@ -93,6 +93,7 @@ Nothing changes until you click; the change runs through the same tools as the M
 | `activeProfile` | first file | Which one to use, by file name without `.settings.json` (e.g. `zai`) |
 | `chatModel` | `sonnet` | Model for the chat: `default`, `opus`, `sonnet` or `haiku` from the file, or a literal model ID |
 | `actionModel` | `haiku` | Model for the actions (same choices) |
+| `chatModel.<backend>`, `actionModel.<backend>` | unset | Per-backend override, e.g. `chatModel.zai` = `default` uses Z.ai's top model while Claude keeps the shared `sonnet`. Settings has a row per backend. |
 | `maxToolIterations` | 10 | Rounds of tool calls a chat may make before it must answer |
 | `maxToolResultChars` | 20000 | Most characters of one tool result the model sees |
 | `maxTokens` | 4096 | Reply cap, including any thinking the model does first |

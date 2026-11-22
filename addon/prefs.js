@@ -13,8 +13,11 @@ pref("extensions.aiops-zotero-mcp.llm.profileFiles", "");
 pref("extensions.aiops-zotero-mcp.llm.activeProfile", "");
 // Model for one-click actions: default, opus, sonnet or haiku (from the settings file), or a model ID.
 pref("extensions.aiops-zotero-mcp.llm.actionModel", "haiku");
-// Model for the item chat (same choices).
+// Model for the chats (same choices).
 pref("extensions.aiops-zotero-mcp.llm.chatModel", "sonnet");
+// Per backend, add extensions.aiops-zotero-mcp.llm.chatModel.<name> / .actionModel.<name>
+// (<name> = settings file name without .settings.json, e.g. chatModel.zai = default); it wins
+// over the shared setting for that backend only. Settings → Zotero MCP Assistant has a row for each.
 // Most tool calls the chat may make before it has to answer, and the most characters of one tool result it sees.
 pref("extensions.aiops-zotero-mcp.llm.maxToolIterations", 10);
 pref("extensions.aiops-zotero-mcp.llm.maxToolResultChars", 20000);

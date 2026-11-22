@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVE_PROFILE_PREF, PROFILE_FILES_PREF, assertLoopback, loadBackend, parseProfile, profileFiles, profileLabel, resolveModel } from "../../src/assistant/config.js";
+import { ACTIVE_PROFILE_PREF, PROFILE_FILES_PREF, assertLoopback, modelChoice, loadBackend, parseProfile, profileFiles, profileLabel, resolveModel } from "../../src/assistant/config.js";
 import { requestHeaders } from "../../src/assistant/transport.js";
 
 const file = "/home/me/.ccs/zai.settings.json";
@@ -63,5 +63,16 @@ describe("loadBackend", () => {
     await expect(loadBackend(reader({}))).rejects.toThrow(/No model backend configured/);
     await expect(loadBackend(reader({ [PROFILE_FILES_PREF]: "/a/zai.settings.json", [ACTIVE_PROFILE_PREF]: "nope" }))).rejects.toThrow(/isn't one of: zai/);
     await expect(loadBackend(reader({ [PROFILE_FILES_PREF]: "/a/missing.settings.json" }))).rejects.toThrow(/can't read/);
+  });
+});
+
+describe("modelChoice", () => {
+  const P = "extensions.aiops-zotero-mcp.llm.";
+  it("prefers the backend's own setting, then the shared one, then the default", () => {
+    const prefs: Record<string, string> = { [`${P}chatModel`]: "sonnet", [`${P}chatModel.zai`]: "default", [`${P}chatModel.claude`]: "  " };
+    const pref = (n: string) => prefs[n];
+    expect(modelChoice(pref, "chatModel", "zai", "x")).toBe("default");
+    expect(modelChoice(pref, "chatModel", "claude", "x")).toBe("sonnet");
+    expect(modelChoice(() => undefined, "actionModel", "zai", "haiku")).toBe("haiku");
   });
 });

@@ -7,10 +7,9 @@ import { type AgentEvent, type PendingWrite, runAgent, trimHistory } from "../as
 import type { ContentBlock, MessageParam } from "../assistant/anthropic.js";
 import { chatSystem, keysIn, librarySystem } from "../assistant/chat.js";
 import { type ViewEntry, deletedChatKeys, parseStoredChat, serializeChat, storeFileName } from "../assistant/store.js";
-import { resolveModel } from "../assistant/config.js";
 import { agentTools } from "../assistant/toolset.js";
 import { CancelledError, send } from "../assistant/transport.js";
-import { actionSettings, chatStore, describeKey, itemContext, numberPref, stringPref, transportDeps } from "../assistant/zotero.js";
+import { actionSettings, chatStore, describeKey, itemContext, modelFor, numberPref, transportDeps } from "../assistant/zotero.js";
 import type { ToolDefinition } from "../mcp/tool.js";
 import { readTools } from "../tools/read.js";
 import { writeTools } from "../tools/write.js";
@@ -302,7 +301,7 @@ async function ask(config: ChatConfig, input: HTMLTextAreaElement): Promise<void
   };
   try {
     const settings = await actionSettings();
-    const model = resolveModel(settings.backend, stringPref("chatModel", "sonnet"));
+    const model = modelFor(settings.backend, "chatModel");
     if (chat.backend && chat.backend !== settings.backend.label) chat.messages = withoutThinking(chat.messages);
     chat.backend = settings.backend.label;
     chat.system ??= await config.system();

@@ -103,6 +103,21 @@ export function resolveModel(backend: Backend, choice: string): string {
   return tier;
 }
 
+export type ModelUse = "chatModel" | "actionModel";
+
+/**
+ * The model choice for a use on a backend: the backend's own pref (llm.chatModel.zai) if set,
+ * else the shared one (llm.chatModel), else the default. Tiers mean different models per backend,
+ * so a per-backend setting lets e.g. Z.ai use its top model while Claude stays on a smaller one.
+ */
+export function modelChoice(pref: (name: string) => unknown, use: ModelUse, label: string, fallback: string): string {
+  for (const name of [`${PREF_PREFIX}${use}.${label}`, `${PREF_PREFIX}${use}`]) {
+    const v = pref(name);
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return fallback;
+}
+
 export interface ConfigReader {
   pref(name: string): unknown;
   readFile(path: string): Promise<string>;
