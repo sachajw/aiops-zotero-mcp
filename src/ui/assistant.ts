@@ -185,7 +185,7 @@ function render(body: HTMLElement, doc: Document, itemID: number): void {
   );
   area.append(actions);
   if (!state) {
-    area.append(el(doc, "div", "Actions change nothing until you click Apply.", "opacity: 0.7;"));
+    area.append(el(doc, "div", "Actions change nothing until you choose what to keep.", "opacity: 0.7;"));
     return;
   }
 
