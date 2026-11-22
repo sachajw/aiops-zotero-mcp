@@ -35,3 +35,19 @@ describe("unfinishedOutcome", () => {
     expect(unfinishedOutcome(done, failure).status).toBe("not_recognized");
   });
 });
+
+import { collectionUndo, tagUndo } from "../../src/tools/write.js";
+
+describe("undo labels", () => {
+  it("label collection changes as Zotero does", () => {
+    expect(collectionUndo(3, 1, 0)).toEqual({ action: "undo-action-add-to-collection", args: { count: 3 } });
+    expect(collectionUndo(1, 0, 2)).toEqual({ action: "undo-action-remove-from-collection", args: { count: 1 } });
+    expect(collectionUndo(2, 1, 1)).toEqual({ action: "undo-action-move-to-collection", args: { count: 2 } });
+  });
+
+  it("label tag changes, with a single label when tags are added and removed together", () => {
+    expect(tagUndo(4, 2, 0)).toEqual({ action: "undo-action-add-tag", args: { count: 4 } });
+    expect(tagUndo(1, 0, 1)).toEqual({ action: "undo-action-remove-tag", args: { count: 1 } });
+    expect(tagUndo(1, 1, 1)).toEqual({ action: "undo-action-change-tag" });
+  });
+});

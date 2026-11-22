@@ -77,11 +77,14 @@ declare namespace ZoteroAPI {
     getChildCollections(asIDs?: false, includeTrashed?: boolean): Collection[];
     getChildItems(asIDs?: false, includeTrashed?: boolean): Item[];
     saveTx(): Promise<number | boolean>;
+    /** Save inside the caller's Zotero.DB.executeTransaction. */
+    save(): Promise<number | boolean>;
   }
 
   interface Search {
     libraryID: number;
-    addCondition(condition: string, operator: string, value?: string | number, required?: boolean): number;
+    /** Zotero 10 throws if the legacy fourth `required` argument is truthy, so it isn't declared. */
+    addCondition(condition: string, operator: string, value?: string | number): number;
     search(): Promise<number[]>;
   }
 
@@ -201,6 +204,10 @@ declare const Zotero: {
   DB: {
     executeTransaction<T>(fn: () => Promise<T>): Promise<T>;
   };
+  /** Zotero 10+ Edit → Undo. stageAction must run inside a transaction; it labels that transaction's changes. */
+  UndoHistory: {
+    stageAction(action: string, args?: Record<string, string | number>): void;
+  };
   Prefs: {
     get(name: string, global?: boolean): unknown;
     set(name: string, value: unknown, global?: boolean): void;
@@ -216,6 +223,7 @@ declare const Zotero: {
     get(id: number): ZoteroAPI.Item | false;
     getByLibraryAndKey(libraryID: number, key: string): ZoteroAPI.Item | false;
     getAsync(ids: number[]): Promise<ZoteroAPI.Item[]>;
+    /** Records its own undo step ("Trash N Items"). */
     trashTx(ids: number[]): Promise<void>;
   };
   Item: new (itemType?: string) => ZoteroAPI.Item & { libraryID: number; parentKey: string | false };

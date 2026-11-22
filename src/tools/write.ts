@@ -67,9 +67,40 @@ function toZoteroCreators(creators: Array<z.infer<typeof zCreator>>): ZoteroAPI.
   );
 }
 
-/** Apply a change to every item and save them in one DB transaction: a failed save rolls back the rest. */
-async function saveAllOrNone(items: ZoteroAPI.Item[], change: (item: ZoteroAPI.Item) => void): Promise<void> {
+/**
+ * An entry for Zotero's Edit → Undo (Zotero 10+): one of Zotero's own undo-action-* Fluent IDs and
+ * its arguments. Creating objects isn't undoable in Zotero, so creation tools don't take one.
+ */
+export interface UndoLabel {
+  action: string;
+  args?: Record<string, string | number>;
+}
+
+/** Collection membership changes, labelled the way Zotero labels the same change made by hand. */
+export function collectionUndo(itemCount: number, adding: number, removing: number): UndoLabel {
+  const action = adding && removing ? "undo-action-move-to-collection" : adding ? "undo-action-add-to-collection" : "undo-action-remove-from-collection";
+  return { action, args: { count: itemCount } };
+}
+
+export function tagUndo(itemCount: number, adding: number, removing: number): UndoLabel {
+  if (adding && removing) return { action: "undo-action-change-tag" };
+  return { action: adding ? "undo-action-add-tag" : "undo-action-remove-tag", args: { count: itemCount } };
+}
+
+/**
+ * Run changes in one DB transaction that Zotero records as a single undo step: a failure rolls back
+ * all of them, and Edit → Undo reverses all of them. Saves inside must use save(), not saveTx().
+ */
+async function undoable(label: UndoLabel, change: () => Promise<void>): Promise<void> {
   await Zotero.DB.executeTransaction(async () => {
+    Zotero.UndoHistory.stageAction(label.action, label.args);
+    await change();
+  });
+}
+
+/** Apply a change to every item and save them as one undoable, all-or-nothing step. */
+async function saveAllOrNone(items: ZoteroAPI.Item[], label: UndoLabel, change: (item: ZoteroAPI.Item) => void): Promise<void> {
+  await undoable(label, async () => {
     for (const item of items) {
       change(item);
       await item.save();
@@ -139,7 +170,10 @@ export const updateCollection = defineTool({
     if (args.dry_run) return dryRunResult(`Would update collection ${collection.key}`, { before, after });
     if (args.name !== undefined) collection.name = args.name;
     if (args.parent_key !== undefined) collection.parentKey = args.parent_key ?? false;
-    await collection.saveTx();
+    const renamed = after.name !== before.name;
+    await undoable({ action: renamed ? "undo-action-rename-collection" : "undo-action-move-collection" }, async () => {
+      await collection.save();
+    });
     return { summary: `Updated collection ${collection.key}`, data: { before, after: collectionView(collection) } };
   },
 });
@@ -208,7 +242,9 @@ export const updateItem = defineTool({
     if (args.dry_run) return dryRunResult(`Would update ${item.key}`, plan);
     for (const c of changes) item.setField(c.field, c.to);
     if (args.creators) item.setCreators(toZoteroCreators(args.creators));
-    await item.saveTx();
+    await undoable({ action: "undo-action-edit-metadata", args: { count: 1 } }, async () => {
+      await item.save();
+    });
     return { summary: `Updated ${item.key} (${changes.length} field changes${args.creators ? ", creators replaced" : ""})`, data: plan };
   },
 });
@@ -423,7 +459,9 @@ export const renameAttachment = defineTool({
     if (args.title && args.title !== before.title) {
       att.setField("title", args.title);
       try {
-        await att.saveTx();
+        await undoable({ action: "undo-action-edit-field", args: { count: 1, field: "Title" } }, async () => {
+          await att.save();
+        });
       } catch (error) {
         if (filename && filename !== before.filename) {
           // The file is already renamed on disk; say so, or the caller assumes nothing changed.
@@ -462,7 +500,7 @@ export const setCollections = defineTool({
     const remove = args.remove.map((k) => getCollection(libraryID, k));
     const plan = { items: items.map((i) => i.key), add: add.map((c) => `${c.key} ${c.name}`), remove: remove.map((c) => `${c.key} ${c.name}`) };
     if (args.dry_run) return dryRunResult(`Would change collections of ${count(items.length, "item")}`, plan);
-    await saveAllOrNone(items, (item) => {
+    await saveAllOrNone(items, collectionUndo(items.length, add.length, remove.length), (item) => {
       add.forEach((c) => item.addToCollection(c.id));
       remove.forEach((c) => item.removeFromCollection(c.id));
     });
@@ -488,7 +526,7 @@ export const setTags = defineTool({
     const items = args.item_keys.map((k) => getItem(libraryID, k));
     const plan = { items: items.map((i) => i.key), add: args.add, remove: args.remove };
     if (args.dry_run) return dryRunResult(`Would change tags on ${count(items.length, "item")}`, plan);
-    await saveAllOrNone(items, (item) => {
+    await saveAllOrNone(items, tagUndo(items.length, args.add.length, args.remove.length), (item) => {
       args.add.forEach((t) => item.addTag(t));
       args.remove.forEach((t) => item.removeTag(t));
     });
@@ -549,6 +587,7 @@ export const trashItems = defineTool({
     if (alreadyTrashed.length) throw new ToolError(`Already in the trash: ${alreadyTrashed.join(", ")}`);
     const plan = items.map(itemSummary);
     if (args.dry_run) return dryRunResult(`Would move ${count(items.length, "item")} to the trash`, plan);
+    // Zotero.Items.trash labels its own undo step ("Trash N Items"), so no undoable() wrapper here.
     await Zotero.Items.trashTx(items.map((i) => i.id));
     return { summary: `Moved ${count(items.length, "item")} to the trash (restore with zotero_restore_items)`, data: plan };
   },
@@ -567,7 +606,7 @@ export const restoreItems = defineTool({
     if (notTrashed.length) throw new ToolError(`Not in the trash: ${notTrashed.join(", ")}`);
     const plan = items.map(itemSummary);
     if (args.dry_run) return dryRunResult(`Would restore ${count(items.length, "item")}`, plan);
-    await saveAllOrNone(items, (item) => {
+    await saveAllOrNone(items, { action: "undo-action-restore-items", args: { count: items.length } }, (item) => {
       item.deleted = false;
     });
     return { summary: `Restored ${count(items.length, "item")}`, data: items.map(itemSummary) };
@@ -590,7 +629,9 @@ export const trashCollection = defineTool({
     const plan = { collection: collectionView(collection), subcollections: sub.map((c) => `${c.key} ${c.name}`) };
     if (args.dry_run) return dryRunResult(`Would move collection ${collection.key} and ${count(sub.length, "subcollection")} to the trash`, plan);
     collection.deleted = true;
-    await collection.saveTx();
+    await undoable({ action: "undo-action-trash-collection", args: { count: 1 } }, async () => {
+      await collection.save();
+    });
     return { summary: `Moved collection ${collection.key} "${collection.name}" to the trash (restore with zotero_restore_collection)`, data: plan };
   },
 });
@@ -607,7 +648,9 @@ export const restoreCollection = defineTool({
     if (!collection.deleted) throw new ToolError(`${collection.key} is not in the trash`);
     if (args.dry_run) return dryRunResult(`Would restore collection ${collection.key}`, { key: collection.key, name: collection.name });
     collection.deleted = false;
-    await collection.saveTx();
+    await undoable({ action: "undo-action-restore-collection", args: { count: 1 } }, async () => {
+      await collection.save();
+    });
     return { summary: `Restored collection ${collection.key} "${collection.name}"`, data: collectionView(collection) };
   },
 });

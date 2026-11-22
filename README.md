@@ -6,7 +6,7 @@ An MCP server that runs **inside Zotero** as a plugin, so AI agents (Claude Code
 - **Localhost only:** served on Zotero's built-in server at `http://127.0.0.1:23119/aiops-mcp`. The plugin opens no socket of its own.
 - **Token required:** every request needs `Authorization: Bearer <token>`; with no token set, it refuses everything (503).
 - **Assistant in Zotero:** an Assistant section in the item pane (and the PDF reader's side pane) lets you chat about the open item and summarises it into a note or suggests tags and collections, and a **Library assistant** window can make changes you approve one by one, using Claude, Z.ai's GLM or any model behind a local proxy that speaks the Anthropic Messages API. Suggestions apply only when you click; see [Assistant](#assistant).
-- **Safe changes:** every change takes `dry_run: true` to preview it. Nothing is deleted permanently: trashing items or collections is undone by the restore tools, and libraries without a trash are refused.
+- **Safe changes:** every change takes `dry_run: true` to preview it, and on Zotero 10 changes to existing items and collections can be reversed with Zotero's **Edit → Undo** (labelled as Zotero labels the same change made by hand; a batch is one step). Nothing is deleted permanently: trashing items or collections is undone by the restore tools, and libraries without a trash are refused.
 
 Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 
