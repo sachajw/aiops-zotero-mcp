@@ -3,7 +3,7 @@
   "version": "0.2.3",
   "private": true,
   "description": "MCP server inside Zotero: manage and research your library from AI agents (localhost only, token auth)",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": "Sacha Wharton",
   "repository": {
     "type": "git",

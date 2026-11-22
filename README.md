@@ -98,3 +98,7 @@ fnox exec -P shell -- mise run test:live   # every tool against your running Zot
 - **Updates:** automatic updates need a published GitHub release whose `.xpi` matches `updates.json` on `main`: commit the bumped `updates.json` and publish the release together, or Zotero sees a version whose download is missing.
 - **Search order:** `zotero_search_items` returns items in item-ID order (roughly the order they were added), not ranked by relevance.
 - **Group libraries:** read and write work where the group is editable, but `zotero_add_file` with `mode: "link"` is limited to My Library (Zotero's rule).
+
+## License
+
+[MIT](LICENSE)
