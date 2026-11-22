@@ -1,3 +1,13 @@
+## v0.9.0 (2026-11-22)
+
+### Docs
+
+- CLAUDE.md covers the assistant and undo, with stale parts fixed
+
+### Features
+
+- choose the chat and actions model per backend
+
 ## v0.8.0 (2026-11-22)
 
 ### Features
