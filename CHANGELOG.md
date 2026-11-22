@@ -1,3 +1,13 @@
+## v0.7.0 (2026-11-22)
+
+### Bug Fixes
+
+- delete an item's saved conversation when the item is permanently deleted
+
+### Features
+
+- assistant keeps conversations across restarts, formats replies, and remembers changes when stopped
+
 ## v0.6.0 (2026-11-22)
 
 ### Docs
