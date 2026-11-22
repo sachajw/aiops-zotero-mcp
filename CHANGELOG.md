@@ -1,3 +1,9 @@
+## v0.3.0 (2026-11-22)
+
+### Features
+
+- find unfiled items, and collections by name with their full paths
+
 ## v0.2.4 (2026-11-22)
 
 ### Builds
