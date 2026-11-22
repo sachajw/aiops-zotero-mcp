@@ -124,14 +124,14 @@ Dry run, nothing changed. Would create collection "Example"
 
 - Zotero sends text from the first pages to its metadata service at zotero.org, looks up the DOI, ISBN or arXiv ID it finds, creates a parent item in the attachment's collections and moves the attachment under it.
 - The file may be renamed to match, depending on your Zotero file-renaming setting.
-- The reply gives each attachment a `status`: `recognized` (with the new parent), `not_recognized` (with the reason, for example a scanned PDF with no text) or `pending`.
+- The reply gives each attachment a `status`: `recognized` (with the new parent), `not_recognized` (with the reason, for example a scanned PDF with no text), `pending`, or `failed` (Zotero's metadata retrieval stopped with an error before reaching it; the reason gives the error, and retrying is safe).
 - The call waits at most `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (45 by default; set it in Zotero → Settings → Advanced → Config Editor). Anything Zotero hasn't finished by then is `pending`: it keeps running in Zotero, so check it later with `zotero_get_item` instead of sending it again. Keep the wait under your MCP client's tool timeout. Big PDFs and ISBN lookups that the catalogue is throttling are the slow ones.
 - Attachments that already have a parent, are not PDFs or EPUBs, or are in the trash are refused before anything runs. It is refused while Zotero is offline.
 - To undo, use the undo entry on the new parent's context menu in Zotero. It is offered for 24 hours, until the parent is edited or Zotero restarts.
 
 ### Reading long texts
 
-`zotero_get_fulltext` returns up to `max_chars` (default 20,000) and tells you the next `offset`. The agent can page through a whole book. Text comes from Zotero's full-text index, or is extracted from the PDF if it has not been indexed yet.
+`zotero_get_fulltext` returns up to `max_chars` (default 20,000) and tells you the next `offset` (also as `hasMore`/`nextOffset` in the data, as `zotero_search_items` does). The agent can page through a whole book. An attachment whose file is missing is skipped, so a parent item's next attachment is tried. Text comes from Zotero's full-text index, or is extracted from the PDF if it has not been indexed yet.
 
 ## 5. Tool reference
 
@@ -161,7 +161,7 @@ Required parameters are marked \*. Defaults in brackets. Every tool also takes `
 | `zotero_update_item` | `item_key`\*, `fields` (empty string clears), `creators` (replaces all) |
 | `zotero_add_file` | `path`\* (absolute), `mode` [`import`] \| `link`, `title`, `parent_item_key`, `collection_keys` |
 | `zotero_retrieve_metadata` | `item_keys`\* (standalone PDF/EPUB attachments, up to 50) |
-| `zotero_rename_attachment` | `item_key`\*, `title`, `filename` (extension kept if omitted; never overwrites) |
+| `zotero_rename_attachment` | `item_key`\*, `title`, `filename` (extension kept if omitted; never overwrites; if the file is renamed but the title save fails, the error says so) |
 | `zotero_set_collections` | `item_keys`\*, `add` [], `remove` [] |
 | `zotero_set_tags` | `item_keys`\*, `add` [], `remove` [] |
 | `zotero_add_note` | `text`\*, `format` [`text`] \| `html`, `parent_item_key`, `collection_keys` |
@@ -199,6 +199,8 @@ Reply:
 {
   "total": 1,
   "offset": 0,
+  "hasMore": false,
+  "nextOffset": null,
   "items": [
     {
       "key": "BFRPRRB9",
@@ -288,6 +290,8 @@ Text of 8DFQYVF7 (attention-notes.txt): characters 0–120 of 272. More: offset 
   "attachmentKey": "8DFQYVF7",
   "totalChars": 272,
   "offset": 0,
+  "hasMore": true,
+  "nextOffset": 120,
   "text": "Example text standing in for the paper. The Transformer is based solely on attention mechanisms, dispensing with recurre"
 }
 ```
@@ -311,6 +315,8 @@ Text of 8DFQYVF7 (attention-notes.txt): characters 120–272 of 272.
   "attachmentKey": "8DFQYVF7",
   "totalChars": 272,
   "offset": 120,
+  "hasMore": false,
+  "nextOffset": null,
   "text": "nce and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable."
 }
 ```
@@ -721,6 +727,8 @@ Reply:
 {
   "total": 1,
   "offset": 0,
+  "hasMore": false,
+  "nextOffset": null,
   "items": [
     {
       "key": "BFRPRRB9",
@@ -773,7 +781,7 @@ Trashed items drop out of searches unless `include_trashed` is set, where they s
 | `401` "Missing or wrong bearer token" | Agent's token differs from Zotero's, or the variable is empty | Start the agent from a shell with `ZOTERO_MCP_TOKEN` (`echo ${#ZOTERO_MCP_TOKEN}` prints 64) |
 | Connection closed with no reply | The request carried an `Origin` header (a browser); Zotero drops those | Use an MCP client, not a web page |
 | Tool result "No item with key ..." | Key from another library, or the item no longer exists | Search again; pass `library_id` for group items |
-| Tool result "Invalid arguments for ..." | A parameter is missing or wrong | The message names it; the agent normally retries |
+| Tool result "Invalid arguments for ..." | A parameter is missing or wrong, or not a parameter of that tool ("Unrecognized key", e.g. a misspelling) | The message names it; the agent normally retries |
 
 Errors that the agent can fix come back as a tool result marked as an error, so it can correct itself. Unexpected failures are also written to Zotero's error console (Help → Debug Output Logging, or Tools → Developer → Error Console).
 

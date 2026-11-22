@@ -16,25 +16,25 @@ Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 | Tool | What it does |
 |---|---|
 | `zotero_list_libraries` | My Library and groups, with IDs and whether they're editable |
-| `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type; paged |
+| `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type; paged in a stable order (by item ID), so pages don't repeat or skip items |
 | `zotero_get_item` | All fields, creators, tags, collections, attachments (and whether each file exists), notes |
 | `zotero_list_collections` | Collections with keys, parents and counts |
 | `zotero_get_attachment` | One attachment's file details |
-| `zotero_get_fulltext` | Text of a PDF/EPUB/snapshot/text attachment, in pages |
+| `zotero_get_fulltext` | Text of a PDF/EPUB/snapshot/text attachment, in pages; attachments with a missing file are skipped |
 | `zotero_get_annotations` | Highlights and notes made in Zotero's reader |
 | `zotero_list_notes` | An item's notes as plain text |
 | `zotero_cite` | Bibliography or in-text citations in an installed style (apa, chicago, ieee, ...) |
 | `zotero_create_collection` / `zotero_update_collection` | Create, rename, move (loops refused) |
 | `zotero_trash_collection` / `zotero_restore_collection` | Collection and subcollections to/from the trash; items stay in the library |
 | `zotero_create_item` / `zotero_update_item` | Regular items; field names and creator types checked against Zotero's schema |
-| `zotero_add_file` | Import or link a local file, under an item or standalone in collections; Zotero's automatic metadata retrieval is suppressed while adding |
-| `zotero_retrieve_metadata` | Zotero's "Retrieve Metadata for PDF" on standalone PDFs/EPUBs: creates the parent item, reports misses, and returns anything still running after a bounded wait as `pending` |
+| `zotero_add_file` | Import or link a local file, under an item or standalone in collections; Zotero's automatic metadata retrieval is suppressed while adding, and your setting comes back after the last of any parallel calls |
+| `zotero_retrieve_metadata` | Zotero's "Retrieve Metadata for PDF" on standalone PDFs/EPUBs: creates the parent item, reports misses, and returns anything still running after a bounded wait as `pending`, and anything a Zotero error stopped as `failed` |
 | `zotero_rename_attachment` | Title and/or file name; never overwrites |
-| `zotero_set_collections` / `zotero_set_tags` | Add/remove collections or tags on many items |
+| `zotero_set_collections` / `zotero_set_tags` | Add/remove collections or tags on many items, all or nothing: one failure leaves every item unchanged |
 | `zotero_add_note` | Child or standalone note, from plain text or HTML |
-| `zotero_trash_items` / `zotero_restore_items` | Items (with their children) to/from the trash |
+| `zotero_trash_items` / `zotero_restore_items` | Items (with their children) to/from the trash; a restore is all or nothing |
 
-Items, collections and attachments are addressed by their 8-character Zotero keys.
+Items, collections and attachments are addressed by their 8-character Zotero keys. Tools reject arguments they don't define, so a misspelled parameter is an error rather than silently ignored. Paged tools return `hasMore` and `nextOffset`.
 
 ## Install
 
@@ -94,4 +94,5 @@ fnox exec -P shell -- mise run test:live   # every tool against your running Zot
 
 - **Transport:** stateless JSON responses only. There's no server-to-client stream (GET answers 405), so no progress notifications. Long `zotero_retrieve_metadata` runs return `pending` items instead; check them later with `zotero_get_item`.
 - **Updates:** `update_url` points at `updates.json` in this repo. While the repo is private, Zotero can't fetch it, so updates are manual (see [Upgrade](#upgrade)) and Zotero's "Allow automatic updates" setting has no effect.
+- **Search order:** `zotero_search_items` returns items in item-ID order (roughly the order they were added), not ranked by relevance.
 - **Group libraries:** read and write work where the group is editable, but `zotero_add_file` with `mode: "link"` is limited to My Library (Zotero's rule).
