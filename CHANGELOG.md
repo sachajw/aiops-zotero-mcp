@@ -1,3 +1,14 @@
+## v0.12.0 (2026-11-22)
+
+### Docs
+
+- ChatGPT can reach the plugin privately through OpenAI's Secure MCP Tunnel
+- use the plugin from the Claude desktop app with a Claude subscription
+
+### Features
+
+- OpenAI chat-completions support: OpenAI, OpenRouter, Ollama, LM Studio
+
 ## v0.11.0 (2026-11-22)
 
 ### Features
