@@ -1,3 +1,13 @@
+## v0.6.0 (2026-11-22)
+
+### Docs
+
+- CLAUDE.md: the uncaught exception on install is Zotero's L10n re-translation
+
+### Features
+
+- library assistant window: changes run only after you approve each one
+
 ## v0.5.0 (2026-11-22)
 
 ### Features
