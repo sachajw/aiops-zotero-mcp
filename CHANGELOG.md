@@ -1,3 +1,15 @@
+## v0.2.3 (2026-11-22)
+
+### Bug Fixes
+
+- strict tool inputs, paging fields, missing-file fulltext, failed metadata runs, half-applied renames
+- overlapping add_file calls keep autoRecognizeFiles; stable search paging; batch writes in one transaction
+
+### Docs
+
+- README, CLAUDE.md and usage for strict inputs, paging fields, stable search order, all-or-nothing batch writes
+- expand install, upgrade, and release docs
+
 ## v0.2.2 (2026-11-18)
 
 ### Bug Fixes
