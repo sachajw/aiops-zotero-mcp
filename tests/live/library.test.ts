@@ -174,6 +174,13 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
       expect(list.data).toEqual([expect.objectContaining({ key: subKey, name: "sub renamed", parentKey: collectionKey })]);
     });
 
+    it("finds a collection by name at any depth, with its full path", async () => {
+      const r = await ok("zotero_list_collections", { name: `test ${stamp}` });
+      expect(r.data).toEqual([expect.objectContaining({ key: collectionKey, path: `aiops-mcp-test ${stamp}` })]);
+      const nested = await ok("zotero_list_collections", { name: "SUB RENAMED", parent_key: collectionKey });
+      expect(nested.data).toEqual([expect.objectContaining({ key: subKey, path: `aiops-mcp-test ${stamp} / sub renamed` })]);
+    });
+
     it("refuses to move a collection inside itself", async () => {
       const r = await tool("zotero_update_collection", { collection_key: collectionKey, parent_key: subKey });
       expect(r.isError).toBe(true);
@@ -204,6 +211,11 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
       expect((inColl.data as { items: Array<{ key: string }> }).items.map((i) => i.key)).toEqual([bookKey]);
       const item = await ok("zotero_get_item", { item_key: bookKey });
       expect(item.data).toMatchObject({ publisher: "Other Press" });
+      // The book is in the test collection, so the unfiled filter leaves it out.
+      const unfiled = await ok("zotero_search_items", { query: `Test Book ${stamp}`, unfiled: true });
+      expect((unfiled.data as { total: number }).total).toBe(0);
+      const both = await tool("zotero_search_items", { unfiled: true, collection_key: collectionKey });
+      expect(both.isError).toBe(true);
     });
 
     it("adds a file under the item, reads its text, and renames it", async () => {

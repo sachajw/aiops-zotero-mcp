@@ -158,6 +158,7 @@ declare const Zotero: {
     getTypesForItemType(itemTypeID: number): Array<{ id: number; name: string }>;
   };
   Collections: {
+    get(id: number): ZoteroAPI.Collection | false;
     getByLibraryAndKey(libraryID: number, key: string): ZoteroAPI.Collection | false;
     getByLibrary(libraryID: number, recursive?: boolean, includeTrashed?: boolean): ZoteroAPI.Collection[];
     getByParent(parentCollectionID: number, recursive?: boolean, includeTrashed?: boolean): ZoteroAPI.Collection[];

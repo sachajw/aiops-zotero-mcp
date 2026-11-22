@@ -16,9 +16,9 @@ Tested against Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x.
 | Tool | What it does |
 |---|---|
 | `zotero_list_libraries` | My Library and groups, with IDs and whether they're editable |
-| `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type; paged in a stable order (by item ID), so pages don't repeat or skip items |
+| `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type, or items in no collection (`unfiled`); paged in a stable order (by item ID), so pages don't repeat or skip items |
 | `zotero_get_item` | All fields, creators, tags, collections, attachments (and whether each file exists), notes |
-| `zotero_list_collections` | Collections with keys, parents and counts |
+| `zotero_list_collections` | Collections with keys, full paths and counts; find one by `name` at any depth |
 | `zotero_get_attachment` | One attachment's file details |
 | `zotero_get_fulltext` | Text of a PDF/EPUB/snapshot/text attachment, in pages; attachments with a missing file are skipped |
 | `zotero_get_annotations` | Highlights and notes made in Zotero's reader |

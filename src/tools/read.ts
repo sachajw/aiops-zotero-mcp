@@ -46,7 +46,7 @@ export const searchItems = defineTool({
   name: "zotero_search_items",
   title: "Search items",
   description:
-    "Find items by text, collection, tag or type. Returns one summary per item (key, type, title, creators, date). " +
+    "Find items by text, collection, tag or type, or the ones in no collection (unfiled). Returns one summary per item (key, type, title, creators, date). " +
     "Use zotero_get_item for full details. Trashed items are excluded unless include_trashed is true.",
   input: z.object({
     query: z.string().min(1).optional().describe("Text to look for."),
@@ -56,6 +56,7 @@ export const searchItems = defineTool({
       .describe("Where to look: title/creator/year, all fields, or everything including full text and notes."),
     collection_key: zKey.optional().describe("Only items in this collection."),
     include_subcollections: z.boolean().default(false),
+    unfiled: z.boolean().default(false).describe("Only items that are in no collection (Zotero's Unfiled Items)."),
     tags: z.array(z.string().min(1)).max(20).optional().describe("Only items with all of these tags."),
     item_type: z.string().min(1).optional().describe('Zotero item type, e.g. "book", "journalArticle", "attachment".'),
     top_level_only: z.boolean().default(true).describe("Leave out child attachments and notes."),
@@ -67,6 +68,7 @@ export const searchItems = defineTool({
   annotations: READ_ONLY,
   async run(args) {
     const libraryID = libraryOf(args.library_id);
+    if (args.unfiled && args.collection_key) throw new ToolError("unfiled and collection_key exclude each other; give one");
     const search = new Zotero.Search();
     search.libraryID = libraryID;
     if (args.query) search.addCondition(SEARCH_MODES[args.mode], "contains", args.query);
@@ -75,6 +77,7 @@ export const searchItems = defineTool({
       search.addCondition("collection", "is", args.collection_key);
       if (args.include_subcollections) search.addCondition("recursive", "true");
     }
+    if (args.unfiled) search.addCondition("unfiled", "true");
     for (const tag of args.tags ?? []) search.addCondition("tag", "is", tag);
     if (args.item_type) {
       if (!Zotero.ItemTypes.getID(args.item_type)) throw new ToolError(`Unknown item type: ${args.item_type}`);
@@ -113,10 +116,13 @@ export const getItemTool = defineTool({
 export const listCollections = defineTool({
   name: "zotero_list_collections",
   title: "List collections",
-  description: "List collections with their keys, parent keys and item counts. Top level by default, or the children of parent_key.",
+  description:
+    "List collections with their keys, full paths and item counts. Top level by default, or the children of parent_key. " +
+    "Give name to find collections by name at any depth (e.g. name: \"Docker\" finds Platform Engineering / Cloud Native / Containers / Docker).",
   input: z.object({
     parent_key: zKey.optional().describe("List the subcollections of this collection."),
     recursive: z.boolean().default(false).describe("Include all descendants, not just one level."),
+    name: z.string().trim().min(1).optional().describe("Only collections whose name contains this text (case-insensitive), at any depth below parent_key or the library."),
     library_id: zLibraryID,
   }),
   annotations: READ_ONLY,
@@ -125,11 +131,12 @@ export const listCollections = defineTool({
     let collections: ZoteroAPI.Collection[];
     if (args.parent_key) {
       const parent = getCollection(libraryID, args.parent_key);
-      collections = Zotero.Collections.getByParent(parent.id, args.recursive);
+      collections = Zotero.Collections.getByParent(parent.id, args.recursive || Boolean(args.name));
     } else {
-      collections = Zotero.Collections.getByLibrary(libraryID, args.recursive);
+      collections = Zotero.Collections.getByLibrary(libraryID, args.recursive || Boolean(args.name));
     }
-    const live = collections.filter((c) => !c.deleted);
+    const needle = args.name?.toLowerCase();
+    const live = collections.filter((c) => !c.deleted && (!needle || c.name.toLowerCase().includes(needle)));
     return { summary: count(live.length, "collection"), data: live.map(collectionView) };
   },
 });

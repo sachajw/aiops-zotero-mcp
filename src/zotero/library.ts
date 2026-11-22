@@ -132,10 +132,26 @@ export async function attachmentView(att: ZoteroAPI.Item): Promise<Record<string
   };
 }
 
+/** "Top / Middle / Name": the collection's names from the top level down. */
+export function collectionPath(
+  c: Pick<ZoteroAPI.Collection, "name" | "parentID">,
+  getById: (id: number) => Pick<ZoteroAPI.Collection, "name" | "parentID"> | false,
+): string {
+  const names = [c.name];
+  for (let parentID = c.parentID; parentID; ) {
+    const parent = getById(parentID);
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentID = parent.parentID;
+  }
+  return names.join(" / ");
+}
+
 export function collectionView(c: ZoteroAPI.Collection): Record<string, unknown> {
   return {
     key: c.key,
     name: c.name,
+    path: collectionPath(c, (id) => Zotero.Collections.get(id)),
     parentKey: c.parentKey || null,
     items: c.getChildItems().length,
     subcollections: c.getChildCollections().length,

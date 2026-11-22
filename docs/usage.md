@@ -142,9 +142,9 @@ Required parameters are marked \*. Defaults in brackets. Every tool also takes `
 | Tool | Parameters |
 |---|---|
 | `zotero_list_libraries` | none |
-| `zotero_search_items` | `query`, `mode` [`title_creator_year`] \| `all_fields` \| `everything`, `collection_key`, `include_subcollections` [false], `tags`, `item_type`, `top_level_only` [true], `include_trashed` [false], `limit` [25, max 200], `offset` [0] |
+| `zotero_search_items` | `query`, `mode` [`title_creator_year`] \| `all_fields` \| `everything`, `collection_key`, `include_subcollections` [false], `unfiled` [false] (items in no collection; not with `collection_key`), `tags`, `item_type`, `top_level_only` [true], `include_trashed` [false], `limit` [25, max 200], `offset` [0] |
 | `zotero_get_item` | `item_key`\* |
-| `zotero_list_collections` | `parent_key`, `recursive` [false] |
+| `zotero_list_collections` | `parent_key`, `recursive` [false], `name` (case-insensitive match at any depth). Each collection includes its `path`, e.g. `Platform Engineering / Cloud Native / Containers` |
 | `zotero_get_attachment` | `item_key`\* |
 | `zotero_get_fulltext` | `item_key`\* (attachment, or parent item), `offset` [0], `max_chars` [20000] |
 | `zotero_get_annotations` | `item_key`\* (attachment, or parent item) |
@@ -498,6 +498,7 @@ Created collection T2M4XIYS "To read"
 {
   "key": "T2M4XIYS",
   "name": "To read",
+  "path": "Worked examples / To read",
   "parentKey": "2DJYJFH6",
   "items": 0,
   "subcollections": 0

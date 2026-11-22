@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { count, nextPage, zKey } from "../../src/zotero/library.js";
+import { collectionPath, count, nextPage, zKey } from "../../src/zotero/library.js";
 
 describe("count", () => {
   it("uses the singular for one and the plural otherwise", () => {
@@ -23,5 +23,23 @@ describe("nextPage", () => {
     expect(nextPage(0, 25, 60)).toEqual({ hasMore: true, nextOffset: 25 });
     expect(nextPage(50, 10, 60)).toEqual({ hasMore: false, nextOffset: null });
     expect(nextPage(100, 0, 60)).toEqual({ hasMore: false, nextOffset: null });
+  });
+});
+
+describe("collectionPath", () => {
+  const byId: Record<number, { name: string; parentID: number | false }> = {
+    1: { name: "Platform Engineering", parentID: false },
+    2: { name: "Cloud Native", parentID: 1 },
+    3: { name: "Containers", parentID: 2 },
+  };
+  const get = (id: number) => byId[id] ?? false;
+
+  it("joins names from the top level down", () => {
+    expect(collectionPath({ name: "Docker", parentID: 3 }, get)).toBe("Platform Engineering / Cloud Native / Containers / Docker");
+    expect(collectionPath({ name: "Library", parentID: false }, get)).toBe("Library");
+  });
+
+  it("stops at a parent it can't find instead of failing", () => {
+    expect(collectionPath({ name: "Orphan", parentID: 99 }, get)).toBe("Orphan");
   });
 });
