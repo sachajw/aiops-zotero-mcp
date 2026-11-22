@@ -1,3 +1,14 @@
+## v0.13.0 (2026-11-22)
+
+### Docs
+
+- README rewritten around the plugin's two parts and who can use what
+- CLAUDE.md: both API formats, OpenAI-format live tests, Claude Desktop guide
+
+### Features
+
+- related items: show them, link and unlink them, and suggest them
+
 ## v0.12.0 (2026-11-22)
 
 ### Docs
