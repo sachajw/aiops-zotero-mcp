@@ -131,6 +131,19 @@ For each backend, the first of these that's set wins: its own row in Settings �
 
 Example: with the shared chat model `sonnet`, **claude → chat** set to `opus` and **zai → chat** set to `default`, chats on Claude use its opus model, chats on Z.ai use its default model, and any other backend uses its sonnet model; the actions use each backend's haiku model.
 
+**Picking the actions model.** The default `haiku` is fast, but on Claude it gave the least accurate suggestions. In a comparison on 5 books (Suggest collection and Suggest related; Zotero 10.0.9, November 2026):
+
+| Backend | Model | Result | Suggest related, time per item |
+|---|---|---|---|
+| Claude | `claude-haiku-5-5` | All 5 collection picks wrong; related picks loosely matched | 2–4 s |
+| Claude | `claude-sonnet-5-5` | All accurate | 3–7 s |
+| Claude | `claude-opus-5-5` | All accurate, slightly sharper related picks | 5–9 s |
+| Z.ai | `glm-4.5-air` | Accurate | 8–10 s |
+| Z.ai | `glm-4.7` | One clear filing error | 4–8 s |
+| Z.ai | `glm-5.3` | Sharpest related picks | 13–20 s |
+
+If accuracy matters more than speed, set **actions** to `sonnet` or `opus` on Claude, and to whichever tier maps to glm-5.3 on Z.ai. Compare each provider on its own: one provider's results don't carry over to another.
+
 To see which model answered: chat replies end with "*model* via *backend*", action results start with "From *model* via *backend*", and **Test** in the Backends list reports the chat model. The MCP endpoint itself uses no model: agents that call its tools use their own.
 
 ### Preferences
@@ -155,7 +168,7 @@ All are under `extensions.aiops-zotero-mcp.llm.` in the Config Editor; the Setti
 - **Keys only travel encrypted:** a backend's URL must be `https://`, or plain `http://` to this computer only (`127.0.0.1`, `localhost`, `[::1]`).
 - **What leaves Zotero:** the item's metadata and the start of its full text, sent to the backend you chose; for tag and collection suggestions, your tag names and collection paths; in the chats, whatever their tools return (more text, annotations, notes, search results, change previews).
 - **Saved conversations:** each chat is saved after every turn as a JSON file in `aiops-zotero-mcp/chats/` inside your Zotero data directory. They hold excerpts of your library, stay on this computer, and aren't synced. **New chat** deletes that conversation's file, and so does deleting the item permanently (trashing keeps it, since the item can come back).
-- **Tested backends:** Claude (`claude-haiku-5-5`, `claude-sonnet-5-5`) and Z.ai (`glm-4.5-air`, `glm-4.7`, `glm-5.3`) in Anthropic format, and an OpenAI-compatible gateway in OpenAI format. Not yet tested against api.openai.com, OpenRouter, Ollama or LM Studio themselves.
+- **Tested backends:** Claude (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`) and Z.ai (`glm-4.5-air`, `glm-4.7`, `glm-5.3`) in Anthropic format, and an OpenAI-compatible gateway in OpenAI format. Not yet tested against api.openai.com, OpenRouter, Ollama or LM Studio themselves.
 
 ## Security model
 
