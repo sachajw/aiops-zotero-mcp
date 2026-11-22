@@ -113,7 +113,25 @@ The key goes in Zotero's password store, never in preferences. It's encrypted on
 
 The plugin never uses a Claude, ChatGPT or other subscription itself: it sends the key you configure, or nothing to a local server or proxy that handles sign-in.
 
-**Models** are chosen by tier (`default`, `opus`, `sonnet`, `haiku`, mapped to each backend's own models) or by model ID. The chats use `sonnet` and the actions `haiku` unless you change them, for all backends or per backend (Settings has a row for each).
+### Which model is used
+
+There are two settings, one for each kind of use:
+
+| Setting | Used by | Default |
+|---|---|---|
+| **Chat model** | The item chat and the Library assistant | `sonnet` |
+| **Actions model** | Summarise, Suggest tags, Suggest collection, Suggest related | `haiku` |
+
+Each is either a **tier** (`default`, `opus`, `sonnet`, `haiku`) or an exact model ID. A tier means "this backend's model for that tier", so the same setting picks the right model on every backend:
+
+- **Providers added in Settings:** the models you entered under **Models** when adding it (default, opus, sonnet, haiku); an empty tier falls back to its default model.
+- **Settings files:** `ANTHROPIC_DEFAULT_OPUS_MODEL`, `…_SONNET_MODEL`, `…_HAIKU_MODEL`, and `ANTHROPIC_MODEL` for `default` (and for any tier the file doesn't set).
+
+For each backend, the first of these that's set wins: its own row in Settings → **Models** (`chatModel.<backend>`, `actionModel.<backend>`), then the shared setting, then the default above.
+
+Example: with the shared chat model `sonnet`, **claude → chat** set to `opus` and **zai → chat** set to `default`, chats on Claude use its opus model, chats on Z.ai use its default model, and any other backend uses its sonnet model; the actions use each backend's haiku model.
+
+To see which model answered: chat replies end with "*model* via *backend*", action results start with "From *model* via *backend*", and **Test** in the Backends list reports the chat model. The MCP endpoint itself uses no model: agents that call its tools use their own.
 
 ### Preferences
 
