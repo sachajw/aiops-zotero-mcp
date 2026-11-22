@@ -68,7 +68,7 @@ If you have a Claude subscription (Pro, Max, Team) and no API key, use the Claud
 
 This gives you the plugin's tools from Claude Desktop (search, read, cite, organise, with dry runs), not the in-Zotero Assistant panel, which needs an API key or a gateway (README → Assistant). Tested by running the bridge exactly as configured above against Zotero 10.0.9 (initialize, all tools listed, a tool call answered); not tested inside Claude Desktop itself.
 
-**ChatGPT:** ChatGPT's connectors reach MCP servers from OpenAI's servers, so they'd need your Zotero exposed to the internet. This plugin is built to stay on 127.0.0.1, so ChatGPT isn't supported.
+**ChatGPT:** ChatGPT connects only to remote MCP servers, but OpenAI's [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) connects a server on your own machine without exposing it to the internet. Per [OpenAI's help article](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt), custom MCP servers are available on ChatGPT Business and Enterprise/Edu, and on Pro with read/fetch permissions only; Plus isn't listed. Point the tunnel at `http://127.0.0.1:23119/aiops-mcp` and give it the bearer token. Not tested with this plugin. Don't expose Zotero's port to the internet instead: the endpoint reads and changes your whole library.
 
 ### Any other MCP client
 
