@@ -1,3 +1,9 @@
+## v0.11.0 (2026-11-22)
+
+### Features
+
+- add a local gateway or proxy in Settings, with an optional key
+
 ## v0.10.0 (2026-11-22)
 
 ### Features
