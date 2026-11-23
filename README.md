@@ -32,7 +32,7 @@ Tested on Zotero 10.0.9 (macOS); the manifest allows Zotero 7.0 to 10.x. MIT lic
 | Tool | What it does |
 |---|---|
 | `zotero_list_libraries` | My Library and groups, with IDs and whether they're editable |
-| `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type, or items in no collection (`unfiled`); paged in a stable order (by item ID) |
+| `zotero_search_items` | Find by text (title/creator/year, all fields, or everything incl. full text), collection, tags, type, or items in no collection (`unfiled`); ranked by relevance (title matches first), or sorted by date added, date modified or title; paged in a stable order |
 | `zotero_get_item` | All fields, creators, tags, collections, related items, attachments (and whether each file exists), notes |
 | `zotero_list_collections` | Collections with keys, full paths and counts; find one by `name` at any depth |
 | `zotero_get_attachment` | One attachment's file details |
@@ -199,7 +199,7 @@ mise run test:live    # live tests; needs ZOTERO_MCP_TOKEN and/or the AIOPS_LLM_
 ## Limits
 
 - **Transport:** stateless JSON responses only. There's no server-to-client stream (GET answers 405), so no progress notifications. Long `zotero_retrieve_metadata` runs return `pending` items instead; check them later with `zotero_get_item`.
-- **Search order:** `zotero_search_items` returns items in item-ID order (roughly the order they were added), not ranked by relevance.
+- **Search ranking:** relevance is scored from the fields Zotero shows (title, creators, year, publication, tags, and in `all_fields` / `everything` the other fields). An item that matched only in its full text, notes or annotations sorts after every field match, not by how often the words appear there.
 - **Group libraries:** read and write work where the group is editable, but `zotero_add_file` with `mode: "link"` is limited to My Library (Zotero's rule).
 - **Undo:** creating items, collections or notes and adding files aren't undoable in Zotero (trash them instead); renaming an attachment's file on disk isn't either, though its title is.
 - **Optional:** `extensions.aiops-zotero-mcp.retrieveMetadataWaitSeconds` (default 45) is how long `zotero_retrieve_metadata` waits before returning; keep it under your MCP client's tool timeout.

@@ -14,6 +14,7 @@ import {
   zKey,
   zLibraryID,
 } from "../zotero/library.js";
+import { type RankFields, rankByScore, relevanceScore } from "../zotero/rank.js";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
@@ -23,6 +24,65 @@ const SEARCH_MODES = {
   all_fields: "quicksearch-fields",
   everything: "quicksearch-everything",
 } as const;
+
+/** Fields scored by rank.ts that aren't in RankFields.other (left out of it so they don't count twice). */
+const RANKED_KEYS = new Set(["title", "creators", "date", "publicationTitle", "shortTitle", "court", "tags"]);
+/** JSON keys that are bookkeeping, not text a user searches for. */
+const UNRANKED_KEYS = new Set(["key", "version", "itemType", "dateAdded", "dateModified", "collections", "relations", "parentItem", "deleted", "linkMode", "contentType", "charset"]);
+
+/** What relevance ranking reads from one item; `other` only for the modes that search all fields. */
+function rankFields(item: ZoteroAPI.Item, allFields: boolean): RankFields {
+  const field = (name: string) => {
+    try {
+      return item.getField(name) || "";
+    } catch {
+      return "";
+    }
+  };
+  const other: string[] = [];
+  if (allFields) {
+    for (const [k, v] of Object.entries(item.toJSON())) {
+      if (typeof v === "string" && v && !RANKED_KEYS.has(k) && !UNRANKED_KEYS.has(k)) other.push(v);
+    }
+  }
+  return {
+    title: field("title") || item.getDisplayTitle(),
+    creators: item.isRegularItem()
+      ? item.getCreators().map((c) => ({ lastName: c.lastName ?? c.name ?? "", firstName: c.firstName }))
+      : [],
+    year: /\d{4}/.exec(field("date"))?.[0] ?? "",
+    publication: [field("publicationTitle"), field("shortTitle"), field("court")].filter(Boolean),
+    tags: item.getTags().map((t) => t.tag),
+    other,
+  };
+}
+
+const titleOrder = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+
+/**
+ * The order to page through. Zotero.Search has no ORDER BY, so every order is computed here from
+ * the full set of matches, with item ID as the tie-breaker: offset/limit pages must not repeat or
+ * skip items.
+ */
+async function orderMatches(ids: number[], sort: SortOrder, query: string | undefined, mode: keyof typeof SEARCH_MODES): Promise<number[]> {
+  const byID = [...ids].sort((a, b) => a - b);
+  if (sort === "relevance" && !query) return byID;
+  const items = await Zotero.Items.getAsync(byID);
+  if (sort === "relevance" && query) {
+    const terms = Zotero.SearchConditions.parseSearchString(query).map((p) => p.text);
+    return rankByScore(items.map((item) => ({ id: item.id, score: relevanceScore(terms, rankFields(item, mode !== "title_creator_year")) })));
+  }
+  if (sort === "title") {
+    return items.sort((a, b) => titleOrder.compare(a.getDisplayTitle(), b.getDisplayTitle()) || a.id - b.id).map((i) => i.id);
+  }
+  // Newest first. Zotero stores both dates as "YYYY-MM-DD hh:mm:ss" UTC, so they compare as strings; items
+  // saved in the same second fall back to the higher (later) item ID first.
+  const date = sort === "date_added" ? (i: ZoteroAPI.Item) => i.dateAdded : (i: ZoteroAPI.Item) => i.dateModified;
+  return items.sort((a, b) => (date(a) < date(b) ? 1 : date(a) > date(b) ? -1 : b.id - a.id)).map((i) => i.id);
+}
+
+const SORT_ORDERS = ["relevance", "date_added", "date_modified", "title"] as const;
+type SortOrder = (typeof SORT_ORDERS)[number];
 
 export const listLibraries = defineTool({
   name: "zotero_list_libraries",
@@ -63,6 +123,13 @@ export const searchItems = defineTool({
     include_trashed: z.boolean().default(false),
     limit: z.number().int().min(1).max(200).default(25),
     offset: z.number().int().min(0).default(0),
+    sort: z
+      .enum(SORT_ORDERS)
+      .default("relevance")
+      .describe(
+        "Order of the results: relevance to query (title matches first; without a query, item-ID order, roughly the order added), " +
+        "date_added or date_modified (newest first), or title (A to Z).",
+      ),
     library_id: zLibraryID,
   }),
   annotations: READ_ONLY,
@@ -86,14 +153,16 @@ export const searchItems = defineTool({
     if (args.top_level_only) search.addCondition("noChildren", "true");
     if (args.include_trashed) search.addCondition("includeDeleted", "true");
 
-    // Zotero.Search has no ORDER BY, so sort: offset/limit pages must not repeat or skip items.
-    const ids = (await search.search()).sort((a, b) => a - b);
+    const ids = await orderMatches(await search.search(), args.sort, args.query, args.mode);
     const page = ids.slice(args.offset, args.offset + args.limit);
-    const items = await Zotero.Items.getAsync(page);
+    // getAsync doesn't promise to keep the order it was given, so put the page back in order.
+    const byID = new Map((await Zotero.Items.getAsync(page)).map((i) => [i.id, i]));
+    const items = page.map((id) => byID.get(id)).filter((i): i is ZoteroAPI.Item => i !== undefined);
     const shown = items.length;
     const more = nextPage(args.offset, shown, ids.length);
+    const order = args.sort === "relevance" && !args.query ? "item ID" : args.sort.replace("_", " ");
     return {
-      summary: `${count(ids.length, "matching item")}; showing ${shown} from offset ${args.offset}` +
+      summary: `${count(ids.length, "matching item")}, by ${order}; showing ${shown} from offset ${args.offset}` +
         (more.hasMore ? `. More: offset ${more.nextOffset}.` : ""),
       data: { total: ids.length, offset: args.offset, ...more, items: items.map(itemSummary) },
     };

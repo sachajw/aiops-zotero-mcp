@@ -178,7 +178,7 @@ Required parameters are marked \*. Defaults in brackets. Every tool also takes `
 | Tool | Parameters |
 |---|---|
 | `zotero_list_libraries` | none |
-| `zotero_search_items` | `query`, `mode` [`title_creator_year`] \| `all_fields` \| `everything`, `collection_key`, `include_subcollections` [false], `unfiled` [false] (items in no collection; not with `collection_key`), `tags`, `item_type`, `top_level_only` [true], `include_trashed` [false], `limit` [25, max 200], `offset` [0] |
+| `zotero_search_items` | `query`, `mode` [`title_creator_year`] \| `all_fields` \| `everything`, `collection_key`, `include_subcollections` [false], `unfiled` [false] (items in no collection; not with `collection_key`), `tags`, `item_type`, `top_level_only` [true], `include_trashed` [false], `sort` [`relevance`] \| `date_added` \| `date_modified` \| `title` (relevance puts title matches first; without a `query` it is item-ID order; dates are newest first), `limit` [25, max 200], `offset` [0] |
 | `zotero_get_item` | `item_key`\* |
 | `zotero_list_collections` | `parent_key`, `recursive` [false], `name` (case-insensitive match at any depth). Each collection includes its `path`, e.g. `Platform Engineering / Cloud Native / Containers` |
 | `zotero_get_attachment` | `item_key`\* |
@@ -231,7 +231,7 @@ Setup for these examples: a collection "Worked examples" holding a journal artic
 Reply:
 
 ```text
-1 matching item; showing 1 from offset 0
+1 matching item, by relevance; showing 1 from offset 0
 
 {
   "total": 1,
@@ -760,7 +760,7 @@ Moved 1 item to the trash (restore with zotero_restore_items)
 Reply:
 
 ```text
-1 matching item; showing 1 from offset 0
+1 matching item, by relevance; showing 1 from offset 0
 
 {
   "total": 1,

@@ -243,6 +243,22 @@ describe.skipIf(Boolean(notReady))("aiops-zotero-mcp against a live Zotero", () 
       expect(both.isError).toBe(true);
     });
 
+    it("ranks search results by relevance, and sorts by title or date added", async () => {
+      // Mentions the book's title only in Extra, so it matches in all_fields mode but ranks below the book.
+      const r = await ok("zotero_create_item", { item_type: "book", fields: { title: `Appendix ${stamp}`, extra: `See Test Book ${stamp}` } });
+      const appendixKey = (r.data as { key: string }).key;
+      created.push(appendixKey);
+      const keys = async (args: Record<string, unknown>) =>
+        ((await ok("zotero_search_items", { query: `Test Book ${stamp}`, mode: "all_fields", ...args })).data as { items: Array<{ key: string }> })
+          .items.map((i) => i.key);
+      expect(await keys({})).toEqual([bookKey, appendixKey]);
+      expect(await keys({ sort: "title" })).toEqual([appendixKey, bookKey]);
+      expect(await keys({ sort: "date_added" })).toEqual([appendixKey, bookKey]);
+      const paged = await ok("zotero_search_items", { query: `Test Book ${stamp}`, mode: "all_fields", limit: 1, offset: 1 });
+      expect((paged.data as { items: Array<{ key: string }> }).items.map((i) => i.key)).toEqual([appendixKey]);
+      expect(paged.text).toMatch(/by relevance/);
+    });
+
     it("adds a file under the item, reads its text, and renames it", async () => {
       const path = join(fileDir, "notes source.txt");
       writeFileSync(path, `Marker ${stamp}: the quick brown fox.`);

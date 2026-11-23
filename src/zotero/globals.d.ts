@@ -196,6 +196,10 @@ declare const Zotero: {
     registerMenu(options: { menuID: string; pluginID: string; target: string; menus: ZoteroUI.MenuData[] }): string | false;
     unregisterMenu(menuID: string): boolean;
   };
+  /** Splits a quick-search string the way Zotero does: words, and "quoted phrases" as one part. */
+  SearchConditions: {
+    parseSearchString(value: string): Array<{ text: string; inQuotes: boolean }>;
+  };
   Tags: {
     getAll(libraryID: number): Promise<Array<{ tag: string; type: number }>>;
   };
