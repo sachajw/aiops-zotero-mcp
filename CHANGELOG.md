@@ -1,3 +1,9 @@
+## v0.14.0 (2026-11-23)
+
+### Features
+
+- zotero_search_items ranks by relevance, with a sort option
+
 ## v0.13.2 (2026-11-22)
 
 ### Bug Fixes
